@@ -183,27 +183,24 @@ void main() {
   float backDepth = (backPosInProjspace.z/backPosInProjspace.w + 1.0) / 2.0;
   float frontDepth = (frontPosInProjspace.z/frontPosInProjspace.w + 1.0) / 2.0;
 
+  fragmentColor = vec4(0.0);
+
   if (frontDepth <= currentDepth && backDepth >= currentDepth) {
-      vec3 currentWorldPos = worldPositionFromDepth(currentDepth);
-      vec3 centerToCurrentPos = currentWorldPos - vSpherePosition;
-      float centerToCurrentPosLen = length(centerToCurrentPos);
-      vec3 directionOnTangentPlane = centerToCurrentPos - vSphereNormal * dot(vSphereNormal, centerToCurrentPos);
-      float cosAngleWithUDir = dot(normalize(directionOnTangentPlane), vUdirection);
+    vec3 currentWorldPos = worldPositionFromDepth(currentDepth);
+    vec3 centerToCurrentPos = currentWorldPos - vSpherePosition;
+    float centerToCurrentPosLen = length(centerToCurrentPos);
+    vec3 directionOnTangentPlane = centerToCurrentPos - vSphereNormal * dot(vSphereNormal, centerToCurrentPos);
+    float cosAngleWithUDir = dot(normalize(directionOnTangentPlane), vUdirection);
 
-      // float geodesisDistanceToCenter = centerToCurrentPosLen;
-      float geodesisDistanceToCenter = (1.0 + pow(1.0 - dot(vSphereNormal, currentNormal), 4.0)) * centerToCurrentPosLen;
+    // float geodesisDistanceToCenter = centerToCurrentPosLen;
+    float geodesisDistanceToCenter = (1.0 + pow(1.0 - dot(vSphereNormal, currentNormal), 4.0)) * centerToCurrentPosLen;
 
-      float u = (geodesisDistanceToCenter * sqrt(2.0) / vSphereRadius * cosAngleWithUDir + 1.0) / 2.0;
-      float v = (geodesisDistanceToCenter * sqrt(2.0) / vSphereRadius * sin(acos(cosAngleWithUDir)) + 1.0) / 2.0;
+    float u = (geodesisDistanceToCenter * sqrt(2.0) / vSphereRadius * cosAngleWithUDir + 1.0) / 2.0;
+    float v = (geodesisDistanceToCenter * sqrt(2.0) / vSphereRadius * sin(acos(cosAngleWithUDir)) + 1.0) / 2.0;
 
-      if (u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0) {
-        fragmentColor = texture(arrowTexture, vec2(u, v));
-      }
-      else {
-        discard;
-      }
-  } else {
-    discard;
+    if (u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0) {
+      fragmentColor = texture(arrowTexture, vec2(u, v));
+    }
   }
 }
 `

@@ -13,18 +13,20 @@ body { margin:0; }
 
 import * as THREE from 'https://unpkg.com/three@0.119.0/build/three.module.js';
 import {OBJLoader} from 'https://unpkg.com/three@0.119.0/examples/jsm/loaders/OBJLoader.js'
+import {OrbitControls} from 'https://unpkg.com/three@0.119.0/examples/jsm/controls/OrbitControls.js'
 
 let renderer;
 let camera;
 let gl;
 let mouseX = 238;
-let mouseY = 292;
+let mouseY = 292;6
 let plane;
 let mouseMovedAndClicked = false;
 let addDecal = false;
 let clickPos;
 let clickNormal;
 let intermediateRenderTarget;
+let planeRotation = 0;
 const uDirection = new THREE.Vector4(1.0, 0.0, 0.0, 0.0);
 
 let main = () => {
@@ -44,6 +46,7 @@ let main = () => {
     type: THREE.FloatType
   });
 
+  const controls = new OrbitControls( camera, renderer.domElement );
   const ext = gl.getExtension("EXT_color_buffer_float");
 
   const obj = new OBJLoader().parse(monkeyObjStr);
@@ -86,7 +89,8 @@ let main = () => {
     vertexShader: sphereVertexShader,
     fragmentShader: sphereFragmentShader,
     depthTest: false,
-    depthWrite: false
+    depthWrite: false,
+    transparent: true
   });
 
 
@@ -95,8 +99,8 @@ let main = () => {
 
   const animate = function () {
     requestAnimationFrame( animate );
+    controls.update();
 
-    // gl.bindFramebuffer(gl.FRAMEBUFFER, normalFb);
     renderer.setRenderTarget(intermediateRenderTarget);
     renderer.render(normalScene, camera);
 
@@ -168,7 +172,11 @@ function extractTransformationMatrix() {
   const cosAngle = planeInitialNormal.dot(clickNormal);
   const transformMatrix = new THREE.Matrix4();
   transformMatrix.makeRotationAxis(rotationAxis, Math.acos(cosAngle));
-  transformMatrix.setPosition(clickPos.x, clickPos.y, clickPos.z+0.01);
+  transformMatrix.multiply(new THREE.Matrix4().makeRotationZ(planeRotation));
+  transformMatrix.multiply(new THREE.Matrix4().makeScale(0.5, 0.5, 1.0));
+
+  const planePosition = clickNormal.clone().multiplyScalar(0.01).add(clickPos);
+  transformMatrix.setPosition(planePosition.x, planePosition.y, planePosition.z);
 
   return transformMatrix;
 }
@@ -213,6 +221,14 @@ document.addEventListener('mousemove', (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.keyCode === 13) {
     addDecal = true;
+  } else if (event.keyCode === 87) {
+    planeRotation = (planeRotation + Math.PI/12.0 + Math.PI * 2.0) % (Math.PI * 2.0);
+    console.log("planeRotation: ", planeRotation);
+    mouseMovedAndClicked = true;
+  } else if (event.keyCode === 83) {
+    planeRotation = (planeRotation - Math.PI/12.0 + Math.PI * 2.0) % (Math.PI * 2.0);
+    console.log("planeRotation: ", planeRotation);
+    mouseMovedAndClicked = true;
   }
 });
 
