@@ -1,4 +1,4 @@
-const intermediateVertexShader =
+const meshIntermediateVertexShader =
 `#version 300 es
 precision highp float;
 
@@ -17,7 +17,7 @@ void main() {
 }
 `
 
-const intermediateFragmentShader =
+const meshIntermediateFragmentShader =
 `#version 300 es
 precision highp float;
 
@@ -29,7 +29,7 @@ void main() {
 }
 `
 
-const displayVertexShader =
+const meshDisplayVertexShader =
 `#version 300 es
 precision highp float;
 
@@ -48,19 +48,19 @@ void main() {
 }
 `
 
-const displayFragmentShader =
+const meshDisplayFragmentShader =
 `#version 300 es
 precision highp float;
+
+uniform float ambient;
+uniform vec3 lightDirection;
 
 in vec3 vNormal;
 out vec4 fragmentColor;
 
-const vec3 toLight = normalize(vec3(1.0, 1.0, 1.0));
-const float ambient = 0.2;
-
 void main() {
-  float lambert = max(dot(normalize(vNormal), toLight), 0.0);
-  fragmentColor = vec4(vec3(1.0) * min(1.0, lambert+ambient), 1.0);
+  float diffuse = max(dot(normalize(vNormal), normalize(lightDirection)), 0.0);
+  fragmentColor = vec4(vec3(1.0) * min(1.0, diffuse+ambient), 1.0);
 }
 `
 
@@ -90,14 +90,11 @@ out vec4 fragmentColor;
 
 void main() {
   vec4 color = texture(arrowTexture, vUv);
-  // if (color.x < 1.0 && color.y < 1.0 && color.z < 1.0) {
-  //   color = vec4(1.0, 0.0, 0.0, 1.0);
-  // }
   fragmentColor = vec4(color.xyz, 0.5);
 }
 `
 
-const sphereVertexShader =
+const decalVertexShader =
 `#version 300 es
 precision highp float;
 
@@ -129,12 +126,15 @@ void main() {
   vUdirection = uDirection;
 }
 `
-const sphereFragmentShader =
+const decalFragmentShader =
 `#version 300 es
 precision highp float;
 
 uniform sampler2D normalDepthTexture;
 uniform sampler2D arrowTexture;
+
+uniform float ambient;
+uniform vec3 lightDirection;
 
 uniform mat4 viewMatrix;
 uniform mat4 modelViewMatrix;
@@ -192,14 +192,17 @@ void main() {
     vec3 directionOnTangentPlane = centerToCurrentPos - vSphereNormal * dot(vSphereNormal, centerToCurrentPos);
     float cosAngleWithUDir = dot(normalize(directionOnTangentPlane), vUdirection);
 
-    // float geodesisDistanceToCenter = centerToCurrentPosLen;
     float geodesisDistanceToCenter = (1.0 + pow(1.0 - dot(vSphereNormal, currentNormal), 4.0)) * centerToCurrentPosLen;
 
     float u = (geodesisDistanceToCenter * sqrt(2.0) / vSphereRadius * cosAngleWithUDir + 1.0) / 2.0;
     float v = (geodesisDistanceToCenter * sqrt(2.0) / vSphereRadius * sin(acos(cosAngleWithUDir)) + 1.0) / 2.0;
 
+    float diffuse = max(dot(normalize(currentNormal), normalize(lightDirection)), 0.0);
+    float lightAmount = min(diffuse + ambient, 1.0);
+
     if (u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0) {
-      fragmentColor = texture(arrowTexture, vec2(u, v));
+      vec4 texColor = texture(arrowTexture, vec2(u, v));
+      fragmentColor = vec4(texColor.xyz * lightAmount, texColor.w);
     }
   }
 }
