@@ -27,6 +27,7 @@ let clickPos;
 let clickNormal;
 let intermediateRenderTarget;
 
+let normalScene;
 let displayScene;
 
 let planeMesh;
@@ -52,49 +53,17 @@ let lightParameters = {
 const uDirection = new THREE.Vector4(1.0, 0.0, 0.0, 0.0);
 
 let main = () => {
-  const normalScene = new THREE.Scene();
-  displayScene = new THREE.Scene();
-
-  camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-  camera.position.z = 5;
-
-  renderer = new THREE.WebGLRenderer();
-  gl = renderer.getContext();
-  renderer.setSize( window.innerWidth, window.innerHeight );
-  document.body.appendChild(renderer.domElement);
-
-  intermediateRenderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
-    format: THREE.RGBAFormat,
-    type: THREE.FloatType
-  });
-
+  setupRenderingEnvironment();
   createMaterials();
-
-  const controls = new OrbitControls(camera, renderer.domElement);
-
-  const obj = new OBJLoader().parse(monkeyObjStr);
-  const originalMesh = obj.children[0];
-
-  const intermediateMesh = new THREE.Mesh(originalMesh.geometry, new THREE.RawShaderMaterial({
-    vertexShader: meshIntermediateVertexShader,
-    fragmentShader: meshIntermediateFragmentShader
-  }));
-  intermediateMesh.rotation.x = -Math.PI / 2.0;
-  normalScene.add(intermediateMesh);
-
-  const displayMesh = new THREE.Mesh(originalMesh.geometry, meshDisplayMaterial);
-  displayMesh.rotation.x = -Math.PI / 2.0;
-  displayScene.add(displayMesh);
-
+  createMesh();
   createPlane();
 
+  const controls = new OrbitControls(camera, renderer.domElement);
   const animate = function () {
     requestAnimationFrame( animate );
     controls.update();
-
     renderer.setRenderTarget(intermediateRenderTarget);
     renderer.render(normalScene, camera);
-
 
     if (planeLocationOrientationChanged) {
       const pixelData = new Float32Array(4);
@@ -118,6 +87,41 @@ let main = () => {
   animate();
 }
 
+function setupRenderingEnvironment() {
+  normalScene = new THREE.Scene();
+  displayScene = new THREE.Scene();
+
+  camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+  camera.position.z = 5;
+
+  renderer = new THREE.WebGLRenderer();
+  gl = renderer.getContext();
+  renderer.setSize( window.innerWidth, window.innerHeight );
+  document.body.appendChild(renderer.domElement);
+
+  intermediateRenderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+    format: THREE.RGBAFormat,
+    type: THREE.FloatType
+  });
+}
+
+function createMesh() {
+  const obj = new OBJLoader().parse(monkeyObjStr);
+  const originalMesh = obj.children[0];
+  originalMesh.geometry.rotateX(Math.PI / 2.0);
+  originalMesh.geometry.rotateZ(Math.PI);
+
+  const intermediateMesh = new THREE.Mesh(originalMesh.geometry, new THREE.RawShaderMaterial({
+    vertexShader: meshIntermediateVertexShader,
+    fragmentShader: meshIntermediateFragmentShader
+  }));
+  // intermediateMesh.rotation.x = -Math.PI / 2.0;
+  normalScene.add(intermediateMesh);
+
+  const displayMesh = new THREE.Mesh(originalMesh.geometry, meshDisplayMaterial);
+  displayScene.add(displayMesh);
+}
+
 function createPlane() {
   const planeGeometry = new THREE.PlaneGeometry(1, 1, 1);
   planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
@@ -131,16 +135,20 @@ function addDecal() {
 }
 
 function createMaterials() {
-  // const imgUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Red_Arrow_Right.svg/1200px-Red_Arrow_Right.svg.png';
-  const imgUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOAAAADgCAMAAAAt85rTAAAAY1BMVEX///8AAACtra3T09PZ2dmkpKT8/PwEBASPj4/d3d3u7u6enp7Jycne3t7V1dX19fVcXFwzMzO4uLjn5+d4eHh+fn6FhYVtbW1JSUkVFRWSkpKLi4s1NTWurq6EhIR3d3dERET2fOTWAAAEJ0lEQVR4nO2dW3LbMAxFST/IKraUNm7aPJqm+19lSefHiSVZA9ADXBhnAQnO3GtS0mjEEBzHcRzHcRzHcRzHcRxHJ4eXLZVVCEl6/AXsIpmfEIJhS/XL8VF69mVsy6hEHjFaaj9D6u8wRxTDX9QMqyFCScmGGaalrAwhIBtmb6kWvKXTIaIY/iULohg+mr9q+031y+XeAoBEN4wYhjVDYkszyv0hNcMM0lLG7zDGd+nZl8FaaUy3FGfHZ7QUZD/8bj5DqmHZY75Jz74McobVEKGk9AxzfJGefRmsDCHwlk5RVhpvqRLst/SJqAezH6Yn+lOMV4AMEz1DEMPAaumr9OzL8JZOZphxMiRzC4bqW1oHtL8f/qBniHFNc2/bMCW6IUxL7/+YzrBMSDbEeIqRuBkiYLylidNSlKcYvN1CPyncPXMMEVpKNoTZDzkZAlx515aS738RDEtJWS3FuD803lLWSoPwFKMmwMsQgTu6IERLQzhQ9WD2w0OkPy99AXgXI9EzLOz0C3IMczVEgNNS4xlGjAxvwbBnGepvKWM/XJLhej0Mw1qO+r+H1fUyTIw/rYR5QwOC8y21IDifofRwTZjLUHq2NswYSo/WiOmWSk/WiskMpQdrxlSG0nO1Y8JQeqyGjLdUeqqWjGYoPVRTxgylZ2rLSEulR2rMeYbSE7XmLEPpgZrz1VB6nvZ8aan0OFdgZzzBo2EyLfippdKzXIed7YrGU0PpSa5EZ1ywN17Rzvgi0x9fxbEr2H26lJGepj2d8Uu17rSf1gTzWX7GBEf8jAl+7ac1wfP8bAn2xh8bjvoZEhzrpyXB/nx9MSXYj8kZEpz0MyI41U8rguPrpx3B6X7aeE9mpp9FcCXN29tq9fCP4Tex/6mCcWLFfH5Bx5vr5LMOQPLbMl7bRvBb8fzUCzLO4gDIL3k/Z7i0fsqTAudl7e7yPxCHk99GxxY3y1ukCw5Bu2AKD9TwcvXTbVch+8XaTww/Uj8h8mP0MyL48fpp2q/0cy09/AJuIT/6/qf/+ozXT+V6hT3VLwL0MzH8IPJLxv2s9/OYH235hNj/GP2MOP20vP/x1hf9DFS/CLC+FLpou58dNTyI+9tjfuTnZ+r9yngbxv6n3q/Mt6GGh5BfoWc939Xux8gvfzzf1Q1j/YwY/eR8dgth/+N8OA3h+przuSaEfpI/uAWR30300+71WWD4gdz/cdYXkH5y/JQLJtYHfPcA+d0909eXvfbXCwLvE9N7hH7y/KQFLmK7n9z8tAt6Py/4KRe0nx/nSB7968uHH7WgCP3k5adcLxzzM7z/HY81y5x+6hZMzPx021VqfnQ/5YKc4y8jxvVZMt5PzmHX6ve/xDuQHSC/xMtPv2DNz+7+xzu2FKCfIRzWw4bGcEDop+M4juM4juM4juM4juOc8B9WvmLR8883OAAAAABJRU5ErkJggg==';
+  const textureLoader = new THREE.TextureLoader();
+  textureLoader.setCrossOrigin('anonymous');
+  const decalAlphaTexture = textureLoader.load('./textures/paw.png');
+  const decalNormalTexture = textureLoader.load('./textures/Pebbles_022_Normal.jpg');
+  const decalColorTexture = textureLoader.load('./textures/Pebbles_022_BaseColor.jpg');
 
-  const arrowTexture = new THREE.TextureLoader().load(imgUrl);
   planeMaterial = new THREE.RawShaderMaterial({
     uniforms: {
-      arrowTexture: {value: arrowTexture}
+      colorTexture: {value: decalAlphaTexture}
     },
     vertexShader: planeVertexShader,
     fragmentShader: planeFragmentShader,
+    depthTest: false,
+    depthWrite: false,
     transparent: true
   });
 
@@ -158,7 +166,9 @@ function createMaterials() {
       lightDirection: {value: sphericalToCartesianDirection(lightParameters.azimuth, lightParameters.elevation)},
       ambient: {value: lightParameters.ambient},
       normalDepthTexture: {value: intermediateRenderTarget.texture},
-      arrowTexture: {value: arrowTexture}
+      decalAlphaTexture: {value: decalAlphaTexture},
+      decalNormalTexture: {value: decalNormalTexture},
+      decalColorTexture: {value: decalColorTexture}
     },
     vertexShader: decalVertexShader,
     fragmentShader: decalFragmentShader,
@@ -204,29 +214,29 @@ function sphericalToCartesianDirection(azimuth, elevation) {
 
 function createDecalGeometry() {
   const planeGeometry = new THREE.PlaneBufferGeometry(2, 2, 1);
-  const spherePositionTypedArray = new Float32Array(6*3);
-  const sphereNormalTypedArray = new Float32Array(6*3);
+  const decalPositionTypedArray = new Float32Array(6*3);
+  const decalNormalTypedArray = new Float32Array(6*3);
   const uDirectionTypedArray = new Float32Array(6*3);
   for (let vid = 0; vid < 6; vid++) {
-    spherePositionTypedArray[vid*3 + 0] = clickPos.x;
-    spherePositionTypedArray[vid*3 + 1] = clickPos.y;
-    spherePositionTypedArray[vid*3 + 2] = clickPos.z;
-    sphereNormalTypedArray[vid*3 + 0] = clickNormal.x;
-    sphereNormalTypedArray[vid*3 + 1] = clickNormal.y;
-    sphereNormalTypedArray[vid*3 + 2] = clickNormal.z;
+    decalPositionTypedArray[vid*3 + 0] = clickPos.x;
+    decalPositionTypedArray[vid*3 + 1] = clickPos.y;
+    decalPositionTypedArray[vid*3 + 2] = clickPos.z;
+    decalNormalTypedArray[vid*3 + 0] = clickNormal.x;
+    decalNormalTypedArray[vid*3 + 1] = clickNormal.y;
+    decalNormalTypedArray[vid*3 + 2] = clickNormal.z;
     uDirectionTypedArray[vid*3 + 0] = uDirection.x;
     uDirectionTypedArray[vid*3 + 1] = uDirection.y;
     uDirectionTypedArray[vid*3 + 2] = uDirection.z;
   }
 
-  const spherePositionAttribute = new THREE.BufferAttribute(spherePositionTypedArray, 3, false);
-  const sphereNormalAttribute = new THREE.BufferAttribute(sphereNormalTypedArray, 3, false);
-  const sphereRadiusAttribute = new THREE.BufferAttribute(new Float32Array(6).fill(decalParameters.size * 0.35), 1, false);
+  const decalPositionAttribute = new THREE.BufferAttribute(decalPositionTypedArray, 3, false);
+  const decalNormalAttribute = new THREE.BufferAttribute(decalNormalTypedArray, 3, false);
+  const decalRadiusAttribute = new THREE.BufferAttribute(new Float32Array(6).fill(decalParameters.size * 0.35), 1, false);
   const uDirectionAttribute = new THREE.BufferAttribute(uDirectionTypedArray, 3, false);
 
-  planeGeometry.setAttribute('spherePosition', spherePositionAttribute);
-  planeGeometry.setAttribute('sphereNormal', sphereNormalAttribute);
-  planeGeometry.setAttribute('sphereRadius', sphereRadiusAttribute);
+  planeGeometry.setAttribute('decalPosition', decalPositionAttribute);
+  planeGeometry.setAttribute('decalNormal', decalNormalAttribute);
+  planeGeometry.setAttribute('decalRadius', decalRadiusAttribute);
   planeGeometry.setAttribute('uDirection', uDirectionAttribute);
 
   return planeGeometry;
