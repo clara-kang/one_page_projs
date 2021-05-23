@@ -14,13 +14,14 @@ import * as THREE from 'https://unpkg.com/three@0.119.0/build/three.module.js';
 import {OBJLoader} from 'https://unpkg.com/three@0.119.0/examples/jsm/loaders/OBJLoader.js'
 import {OrbitControls} from 'https://unpkg.com/three@0.119.0/examples/jsm/controls/OrbitControls.js'
 
+const objScale = 2.0;
 let lightParameters = {
   azimuth: Math.PI / 4.0,
   elevation: 0.2,
   ambient: 0.2
 };
 let objParameters = {
-  zScale: 0.1
+  zScale: 0.3
 };
 let material;
 let cubeMesh;
@@ -62,7 +63,7 @@ function createGeometry() {
 function setUpGui() {
   const gui = new dat.GUI({name: 'Parameters'});
   gui.add(objParameters, 'zScale', 0, 0.5).step(0.01).onChange(() => {
-    cubeMesh.scale.setZ(objParameters.zScale);
+    cubeMesh.scale.setZ(2.0 * objParameters.zScale);
   })
   const lightParamFolder = gui.addFolder('Light Parameters');
   lightParamFolder.add(lightParameters, 'azimuth', 0.0, Math.PI * 2.0).step(0.01).onChange(() => updateLightDirectionUniforms());
@@ -91,25 +92,29 @@ document.body.appendChild( renderer.domElement );
 const geometry = createGeometry();
 const colorTexture = new THREE.TextureLoader().load("textures/concrete.jpg");
 const heightTexture = new THREE.TextureLoader().load("textures/heightmap.jpg", () => {
-  cubeMesh.scale.setX(heightTexture.image.width/heightTexture.image.height);
+  cubeMesh.scale.setX(objScale * heightTexture.image.width/heightTexture.image.height);
 });
+heightTexture.minFilter =  THREE.LinearFilter;
+heightTexture.magFilter =  THREE.LinearFilter;
 
 material = new THREE.RawShaderMaterial({
   uniforms: {
     colorTex: {value: colorTexture},
     heightTex: {value: heightTexture},
     lightDirection: {value: sphericalToCartesianDirection(lightParameters.azimuth, lightParameters.elevation)},
-    ambient: {value: 0.2}
+    ambient: {value: lightParameters.ambient}
   },
   vertexShader: POMVertexShader,
   fragmentShader: POMFragmentShader
 });
 cubeMesh = new THREE.Mesh(geometry, material);
-cubeMesh.scale.setZ(objParameters.zScale);
+cubeMesh.scale.setX(objScale);
+cubeMesh.scale.setY(objScale);
+cubeMesh.scale.setZ(objScale * objParameters.zScale);
 
 scene.add(cubeMesh);
 
-camera.position.z = 2;
+camera.position.z = 1.5;
 
 const animate = function () {
 	requestAnimationFrame( animate );
