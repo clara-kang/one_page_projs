@@ -1,0 +1,124 @@
+
+<!DOCTYPE html>
+<html>
+<body>
+<style type="text/css">
+body { margin:0; }
+</style>
+
+<script src='./shaders.js'></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5/dat.gui.min.js"></script>
+<script type="module">
+
+import * as THREE from 'https://unpkg.com/three@0.119.0/build/three.module.js';
+import {OBJLoader} from 'https://unpkg.com/three@0.119.0/examples/jsm/loaders/OBJLoader.js'
+import {OrbitControls} from 'https://unpkg.com/three@0.119.0/examples/jsm/controls/OrbitControls.js'
+
+let lightParameters = {
+  azimuth: Math.PI / 4.0,
+  elevation: 0.2,
+  ambient: 0.2
+};
+let objParameters = {
+  zScale: 0.1
+};
+let material;
+let cubeMesh;
+
+function sphericalToCartesianDirection(azimuth, elevation) {
+  return new THREE.Vector3 (
+    Math.cos(elevation) * Math.cos(azimuth),
+    Math.cos(elevation) * Math.sin(azimuth),
+    Math.sin(-elevation),
+  );
+}
+
+function createGeometry() {
+    const frontPlaneGeometry = new THREE.PlaneGeometry(1,1,1,1);
+    frontPlaneGeometry.rotateX(Math.PI / 2.0);
+    frontPlaneGeometry.translate(0.0, -0.5, -0.5);
+
+    const leftPlaneGeometry = new THREE.PlaneGeometry(1,1,1,1);
+    leftPlaneGeometry.rotateY(-Math.PI / 2.0);
+    leftPlaneGeometry.translate(-0.5, 0.0, -0.5);
+
+    const rightPlaneGeometry = new THREE.PlaneGeometry(1,1,1,1);
+    rightPlaneGeometry.rotateY(Math.PI / 2.0);
+    rightPlaneGeometry.translate(0.5, 0.0, -0.5);
+
+    const backPlaneGeometry = new THREE.PlaneGeometry(1,1,1,1);
+    backPlaneGeometry.rotateX(-Math.PI / 2.0);
+    backPlaneGeometry.translate(0.0, 0.5, -0.5);
+
+    const boxGeometry = new THREE.PlaneGeometry(1,1,1,1);
+    boxGeometry.merge(frontPlaneGeometry);
+    boxGeometry.merge(leftPlaneGeometry);
+    boxGeometry.merge(rightPlaneGeometry);
+    boxGeometry.merge(backPlaneGeometry);
+
+    return boxGeometry;
+}
+
+function setUpGui() {
+  const gui = new dat.GUI({name: 'Parameters'});
+  gui.add(objParameters, 'zScale', 0, 0.5).step(0.01).onChange(() => {
+    cubeMesh.scale.setZ(objParameters.zScale);
+  })
+  const lightParamFolder = gui.addFolder('Light Parameters');
+  lightParamFolder.add(lightParameters, 'azimuth', 0.0, Math.PI * 2.0).step(0.01).onChange(() => updateLightDirectionUniforms());
+  lightParamFolder.add(lightParameters, 'elevation', 0, Math.PI/2.0).step(0.01).onChange(() => updateLightDirectionUniforms());
+  lightParamFolder.add(lightParameters, 'ambient', 0.0, 0.5).step(0.01).onChange(() => updateAmbientUniforms());
+  lightParamFolder.open();
+}
+
+function updateLightDirectionUniforms() {
+  const lightDirection = sphericalToCartesianDirection(lightParameters.azimuth, lightParameters.elevation);
+  material.uniforms.lightDirection.value.set(lightDirection.x, lightDirection.y, lightDirection.z);
+}
+
+function updateAmbientUniforms() {
+  material.uniforms.ambient.value = lightParameters.ambient;
+  material.needsUpdate = true;
+}
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+const renderer = new THREE.WebGLRenderer();
+const controls = new OrbitControls(camera, renderer.domElement);
+renderer.setSize( window.innerWidth, window.innerHeight );
+document.body.appendChild( renderer.domElement );
+
+const geometry = createGeometry();
+const colorTexture = new THREE.TextureLoader().load("textures/concrete.jpg");
+const heightTexture = new THREE.TextureLoader().load("textures/heightmap.jpg", () => {
+  cubeMesh.scale.setX(heightTexture.image.width/heightTexture.image.height);
+});
+
+material = new THREE.RawShaderMaterial({
+  uniforms: {
+    colorTex: {value: colorTexture},
+    heightTex: {value: heightTexture},
+    lightDirection: {value: sphericalToCartesianDirection(lightParameters.azimuth, lightParameters.elevation)},
+    ambient: {value: 0.2}
+  },
+  vertexShader: POMVertexShader,
+  fragmentShader: POMFragmentShader
+});
+cubeMesh = new THREE.Mesh(geometry, material);
+cubeMesh.scale.setZ(objParameters.zScale);
+
+scene.add(cubeMesh);
+
+camera.position.z = 2;
+
+const animate = function () {
+	requestAnimationFrame( animate );
+  controls.update();
+	renderer.render( scene, camera );
+};
+setUpGui();
+animate();
+
+</script>
+</body>
+</html>
