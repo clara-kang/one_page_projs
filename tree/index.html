@@ -1,0 +1,128 @@
+
+<!DOCTYPE html>
+<html>
+<body>
+<style type="text/css">
+body { margin:0; }
+</style>
+
+<!-- <script src='./shaders.js'></script> -->
+<!-- <script src='./branch.js'></script> -->
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5/dat.gui.min.js"></script>
+<script type="module">
+
+import * as THREE from 'https://unpkg.com/three@0.119.0/build/three.module.js';
+import {OrbitControls} from 'https://unpkg.com/three@0.119.0/examples/jsm/controls/OrbitControls.js'
+
+let branchDeviationFactor = 0.2;
+
+let camera;
+let renderer;
+let rootGroup;
+let sharedGeometry;
+let currentLevel = 0;
+
+const levelHeightShrinkFactor = 0.6;
+const levelRadiusShrinkFactor = 0.5;
+
+function createBranchMesh(level) {
+  const branchMesh = new THREE.Mesh(sharedGeometry, new THREE.MeshLambertMaterial({color: 0xffff00}));
+  branchMesh.scale.set(Math.pow(levelRadiusShrinkFactor, level), Math.pow(levelHeightShrinkFactor, level), Math.pow(levelRadiusShrinkFactor, level));
+
+  return branchMesh;
+}
+
+function growBranchesOnGroup(parentGroup, branchNumber, branchDeviationFactor, level) {
+  const segmentLength = parentGroup.children[0].scale.y / branchNumber;
+  const yRotationOffset = Math.PI * 2 * branchDeviationFactor * Math.random() / branchNumber;
+  for (let branchId = 0; branchId < branchNumber; ++branchId) {
+    const branchGroup = new THREE.Group();
+
+    branchGroup.translateY(segmentLength * (branchId + 0.5 + Math.random() * branchDeviationFactor));
+    branchGroup.rotateY(yRotationOffset + Math.PI * 2 * (1 + Math.random() * branchDeviationFactor) * branchId / branchNumber);
+    branchGroup.rotateZ(Math.PI / 3);
+
+    branchGroup.add(createBranchMesh(level));
+    parentGroup.add(branchGroup);
+  }
+}
+
+function getLowestLevelGroups(rootGroup) {
+  const lowestLevelGroups = [];
+  const stack = [];
+  stack.push(rootGroup);
+
+  while (stack.length > 0) {
+    const group = stack.pop();
+    if (group.children.length === 1) {
+      lowestLevelGroups.push(group);
+    } else {
+      for (let childIndex = 1; childIndex < group.children.length; ++childIndex) {
+          stack.push(group.children[childIndex]);
+      }
+    }
+  }
+
+  return lowestLevelGroups;
+}
+
+function growAnotherLevel() {
+  const lowestLevelGroups = getLowestLevelGroups(rootGroup);
+  currentLevel += 1;
+  for (const group of lowestLevelGroups) {
+    growBranchesOnGroup(group, 2 + Math.floor(Math.random() * 5), 0.2, currentLevel);
+  }
+}
+
+function setUpGui() {
+  const gui = new dat.GUI({name: 'Tree Parameters'});
+  const obj = {
+    grow: () => {
+      growAnotherLevel()
+    }
+  };
+
+  gui.add(obj,'grow');
+}
+
+function main() {
+  const scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+  renderer = new THREE.WebGLRenderer();
+  const controls = new OrbitControls(camera, renderer.domElement);
+  renderer.setSize( window.innerWidth, window.innerHeight );
+  document.body.appendChild( renderer.domElement );
+
+  sharedGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 10);
+  sharedGeometry.translate(0, 0.5, 0);
+
+  rootGroup = new THREE.Group();
+  rootGroup.add(createBranchMesh(currentLevel));
+  scene.add(rootGroup);
+
+  const light = new THREE.HemisphereLight(0xffffbb, 0x080820, 1);
+  scene.add( light );
+
+  camera.position.z = 1.5;
+
+  const animate = function () {
+  	requestAnimationFrame( animate );
+    controls.update();
+  	renderer.render( scene, camera );
+  };
+  setUpGui();
+  animate();
+}
+
+function onWindowResize() {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+
+window.onload = main;
+window.onresize = onWindowResize;
+
+</script>
+</body>
+</html>
