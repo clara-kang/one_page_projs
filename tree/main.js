@@ -4,7 +4,7 @@ import {interactionVertexShader, interactionFragmentShader} from './shaders.js'
 import {encodeInteractionIndex, decodeInteractionIndex, getGroupLevel, getLowestLevelGroups, applyFunctionToGroup} from './helpers.js';
 
 let branchDeviationFactor = 0.2;
-
+const branchGrowingPortion = 0.8;
 // rendering environment
 let camera;
 let renderer;
@@ -17,12 +17,12 @@ let visualizationRootGroup;
 let floatingBranchGroup;
 let sharedGeometry;
 let interactionToVisualizationGroupMap = new Map();
+let visualizationToInteractionGroupMap = new Map();
 
 // interaction records
 let mouseX;
 let mouseY;
 let mouseNDC = new THREE.Vector2();
-let currentLevel = 0;
 let lastHoveredGroup = null;
 let showVisualization = true;
 
@@ -48,21 +48,28 @@ function createBranchMesh(level, isInteractionMesh) {
     branchMesh = new THREE.Mesh(sharedGeometry, createInteractionMaterial());
     branchMesh.material.uniforms.interactionIndex.value = encodeInteractionIndex(branchMesh.id);
   } else {
-    branchMesh = new THREE.Mesh(sharedGeometry, new THREE.MeshLambertMaterial({color: displayColor, transparent: true}));
+    branchMesh = new THREE.Mesh(sharedGeometry, new THREE.MeshLambertMaterial({color: displayColor}));
   }
   branchMesh.scale.set(Math.pow(levelRadiusShrinkFactor, level), Math.pow(levelHeightShrinkFactor, level), Math.pow(levelRadiusShrinkFactor, level));
 
   return branchMesh;
 }
 
+function setInteractionToVisualizationGroupMapping(interactionBranchGroup, visualizationBranchGroup) {
+  interactionToVisualizationGroupMap.set(interactionBranchGroup, visualizationBranchGroup);
+  visualizationToInteractionGroupMap.set(visualizationBranchGroup, interactionBranchGroup);
+}
+
 function growBranchesOnGroup(parentInteractionGroup, parentVisualizationGroup, branchNumber, branchDeviationFactor, level) {
-  const segmentLength = parentInteractionGroup.children[0].scale.y / branchNumber;
+  const parentBranchLength = parentInteractionGroup.children[0].scale.y;
+  const notGrowingLength = parentBranchLength * (1 - branchGrowingPortion);
+  const segmentLength = parentBranchLength * branchGrowingPortion / branchNumber;
   const yRotationOffset = Math.PI * 2 * branchDeviationFactor * Math.random() / branchNumber;
 
   for (let branchId = 0; branchId < branchNumber; ++branchId) {
     const interactionBranchGroup = new THREE.Group();
 
-    interactionBranchGroup.translateY(segmentLength * (branchId + 0.5 + Math.random() * branchDeviationFactor));
+    interactionBranchGroup.translateY(notGrowingLength + segmentLength * (branchId + 0.5 + Math.random() * branchDeviationFactor));
     interactionBranchGroup.rotateY(yRotationOffset + Math.PI * 2 * (1 + Math.random() * branchDeviationFactor) * branchId / branchNumber);
     interactionBranchGroup.rotateZ(Math.PI / 3);
 
@@ -70,7 +77,7 @@ function growBranchesOnGroup(parentInteractionGroup, parentVisualizationGroup, b
 
     interactionBranchGroup.add(createBranchMesh(level, true));
     visualizationBranchGroup.add(createBranchMesh(level, false));
-    interactionToVisualizationGroupMap.set(interactionBranchGroup, visualizationBranchGroup);
+    setInteractionToVisualizationGroupMapping(interactionBranchGroup, visualizationBranchGroup);
     parentInteractionGroup.add(interactionBranchGroup);
     parentVisualizationGroup.add(visualizationBranchGroup);
   }
@@ -78,10 +85,9 @@ function growBranchesOnGroup(parentInteractionGroup, parentVisualizationGroup, b
 
 function growAnotherLevel() {
   const lowestLevelGroups = getLowestLevelGroups(interactionRootGroup);
-  currentLevel += 1;
   for (const interactionGroup of lowestLevelGroups) {
     const visualizationGroup = interactionToVisualizationGroupMap.get(interactionGroup);
-    growBranchesOnGroup(interactionGroup, visualizationGroup, 2 + Math.floor(Math.random() * 5), 0.2, currentLevel);
+    growBranchesOnGroup(interactionGroup, visualizationGroup, 2 + Math.floor(Math.random() * 5), 0.2, getGroupLevel(interactionGroup) + 1);
   }
 }
 
@@ -135,14 +141,14 @@ function main() {
   floatingBranchGroup.rotateZ(-Math.PI / 3);
 
   interactionRootGroup = new THREE.Group();
-  interactionRootGroup.add(createBranchMesh(currentLevel, true));
+  interactionRootGroup.add(createBranchMesh(0, true));
   interactionScene.add(interactionRootGroup);
 
   visualizationRootGroup = new THREE.Group();
-  visualizationRootGroup.add(createBranchMesh(currentLevel, false));
+  visualizationRootGroup.add(createBranchMesh(0, false));
   visualizationScene.add(visualizationRootGroup);
 
-  interactionToVisualizationGroupMap.set(interactionRootGroup, visualizationRootGroup);
+  setInteractionToVisualizationGroupMapping(interactionRootGroup, visualizationRootGroup);
 
   const light = new THREE.HemisphereLight(0xffffbb, 0x080820, 1);
   visualizationScene.add(light);
@@ -190,6 +196,23 @@ function performHoveredInteraction(interactionIndex) {
     const visualizationGroupHovered = interactionToVisualizationGroupMap.get(objectHovered.parent);
     changeVisualizationGroupColorAndOpacity(visualizationGroupHovered, hoveredColor, 0.5);
     lastHoveredGroup = visualizationGroupHovered;
+  }
+}
+
+function attachFloatingBranch() {
+  if (floatingBranchGroup.parent && floatingBranchGroup.visible) {
+    const parentVisualizationGroup = floatingBranchGroup.parent;
+    const parentInteractionGroup = visualizationToInteractionGroupMap.get(parentVisualizationGroup);
+    const interactionGroup = floatingBranchGroup.clone();
+    const visualizationGroup = floatingBranchGroup.clone();
+    const interactionMesh = interactionGroup.children[0];
+    const visualizationMesh = visualizationGroup.children[0];
+    interactionMesh.material = createInteractionMaterial();
+    interactionMesh.material.uniforms.interactionIndex.value = encodeInteractionIndex(interactionMesh.id);
+    visualizationMesh.material = new THREE.MeshLambertMaterial({color: displayColor});
+    setInteractionToVisualizationGroupMapping(interactionGroup, visualizationGroup);
+    parentInteractionGroup.add(interactionGroup);
+    parentVisualizationGroup.add(visualizationGroup);
   }
 }
 
@@ -243,6 +266,10 @@ document.addEventListener('keydown', (event) => {
       floatingBranchGroup.rotation.y -= 0.1;
     }
   }
+});
+
+document.addEventListener('click', (event) => {
+  attachFloatingBranch();
 });
 
 window.onload = main;
