@@ -3,7 +3,8 @@
 <html>
 <body>
 <style type="text/css">
-body { margin:0; }
+body {margin:0; padding:0;}
+canvas {display:block;}
 </style>
 
 <script src='./shaders.js'></script>
@@ -24,16 +25,19 @@ let gl;
 let interactionRenderTarget;
 let interactionRootGroup;
 let visualizationRootGroup;
+let floatingBranchGroup;
 let sharedGeometry;
 let interactionToVisualizationGroupMap = new Map();
 
 // interaction records
 let mouseX;
 let mouseY;
+let mouseNDC = new THREE.Vector2();
 let currentLevel = 0;
 let lastHoveredGroup = null;
 let showVisualization = true;
 
+const raycaster = new THREE.Raycaster();
 const levelHeightShrinkFactor = 0.6;
 const levelRadiusShrinkFactor = 0.5;
 const displayColor = 0xffff00;
@@ -55,6 +59,16 @@ function encodeInteractionIndex(interactionIndex) {
 
 function decodeInteractionIndex(pixelData) {
   return Math.floor(pixelData[0] * 255 * 256 + pixelData[1] * 255);
+}
+
+function getGroupLevel(group) {
+  let level = 0;
+  let currentGroup = group;
+  while (currentGroup.parent.type === 'Group') {
+    level++;
+    currentGroup = currentGroup.parent;
+  }
+  return level;
 }
 
 function createBranchMesh(level, isInteractionMesh) {
@@ -161,7 +175,7 @@ function setupRenderingEnvironment() {
   renderer = new THREE.WebGLRenderer();
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
-  gl = renderer.getContext();
+  gl = renderer.getContext({antialias:false});
 }
 
 function main() {
@@ -172,6 +186,10 @@ function main() {
 
   sharedGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 10);
   sharedGeometry.translate(0, 0.5, 0);
+
+  floatingBranchGroup = new THREE.Group();
+  floatingBranchGroup.add(new THREE.Mesh(sharedGeometry, new THREE.MeshLambertMaterial({color: 0xccff99, transparent: true, opacity: 0.5})));
+  floatingBranchGroup.rotateZ(-Math.PI / 3);
 
   interactionRootGroup = new THREE.Group();
   interactionRootGroup.add(createBranchMesh(currentLevel, true));
@@ -196,9 +214,11 @@ function main() {
     if (showVisualization) {
       renderer.setRenderTarget(interactionRenderTarget);
       renderer.render(interactionScene, camera);
+      raycaster.setFromCamera(mouseNDC, camera);
 
       const interactionIndex = readInteractionIndex(gl, mouseX, mouseY);
-      performHoveredInteraction(interactionIndex);
+      // performHoveredInteraction(interactionIndex);
+      performGrowBranchInteraction(interactionIndex);
 
       renderer.setRenderTarget(null);
       renderer.render(visualizationScene, camera);
@@ -230,6 +250,31 @@ function performHoveredInteraction(interactionIndex) {
   }
 }
 
+function performGrowBranchInteraction(interactionIndex) {
+  if (interactionIndex) {
+    const meshHovered = interactionRootGroup.getObjectById(interactionIndex);
+    const intersects = raycaster.intersectObject(meshHovered);
+    if (intersects.length > 0) {
+      const parentInteractionGroup = meshHovered.parent;
+      const parentVisualizationGroup = interactionToVisualizationGroupMap.get(meshHovered.parent);
+      parentVisualizationGroup.add(floatingBranchGroup);
+
+      const level = getGroupLevel(floatingBranchGroup);
+      floatingBranchGroup.children[0].scale
+        .set(Math.pow(levelRadiusShrinkFactor, level), Math.pow(levelHeightShrinkFactor, level), Math.pow(levelRadiusShrinkFactor, level));
+
+      const intersectionPointLocal = parentInteractionGroup.worldToLocal(intersects[0].point.clone());
+      floatingBranchGroup.position.set(0, intersectionPointLocal.y, 0);
+      floatingBranchGroup.visible = true;
+    }
+  } else {
+    if (floatingBranchGroup.parent) {
+      floatingBranchGroup.parent.remove(floatingBranchGroup);
+    }
+    floatingBranchGroup.visible = false;
+  }
+}
+
 function onWindowResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -240,6 +285,21 @@ function onWindowResize() {
 document.addEventListener('mousemove', (event) => {
   mouseX = event.clientX;
   mouseY = event.clientY;
+  mouseNDC.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouseNDC.y = -(event.clientY / window.innerHeight) * 2 + 1;
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.keyCode === 87) {
+    if (floatingBranchGroup.parent.type === 'Group') {
+      floatingBranchGroup.rotation.y += 0.1;
+    }
+  }
+  if (event.keyCode === 83) {
+    if (floatingBranchGroup.parent.type === 'Group') {
+      floatingBranchGroup.rotation.y -= 0.1;
+    }
+  }
 });
 
 window.onload = main;
