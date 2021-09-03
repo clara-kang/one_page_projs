@@ -9,6 +9,7 @@ export class Tree {
   camera;
   mouseX;
   mouseY;
+  interactionIndex
   interactionRenderTarget;
   sharedGeometry;
   floatingBranchGroup;
@@ -63,14 +64,12 @@ export class Tree {
 
   performHoveredInteraction() {
     if (typeof this.mouseX !== 'undefined' && typeof this.mouseX !== 'undefined') {
-      const interactionIndex = this.readInteractionIndex(this.gl, this.mouseX, this.mouseY);
-
       if (this.lastHoveredGroup) {
         this.changeVisualizationGroupColorAndOpacity(this.lastHoveredGroup, this.displayColor, 1);
         this.lastHoveredGroup = null;
       }
-      if (interactionIndex) {
-        const meshHovered = this.interactionRootGroup.getObjectById(interactionIndex);
+      if (this.interactionIndex) {
+        const meshHovered = this.interactionRootGroup.getObjectById(this.interactionIndex);
         const visualizationGroupHovered = this.interactionToVisualizationGroupMap.get(meshHovered.parent);
         this.changeVisualizationGroupColorAndOpacity(visualizationGroupHovered, this.hoveredColor, 0.5);
         this.lastHoveredGroup = visualizationGroupHovered;
@@ -80,10 +79,8 @@ export class Tree {
 
   performGrowBranchInteraction() {
     if (this.mouseX && this.mouseX) {
-      const interactionIndex = this.readInteractionIndex(this.gl, this.mouseX, this.mouseY);
-
-      if (interactionIndex) {
-        const meshHovered = this.interactionRootGroup.getObjectById(interactionIndex);
+      if (this.interactionIndex) {
+        const meshHovered = this.interactionRootGroup.getObjectById(this.interactionIndex);
         const intersects = this.raycaster.intersectObject(meshHovered);
         if (intersects.length > 0) {
           const parentInteractionGroup = meshHovered.parent;
@@ -117,8 +114,8 @@ export class Tree {
     if (showVisualization) {
       this.renderer.setRenderTarget(this.interactionRenderTarget);
       this.renderer.render(this.interactionScene, this.camera);
-      this.performGrowBranchInteraction();
-      // this.performHoveredInteraction();
+      // this.performGrowBranchInteraction();
+      this.interactionIndex = this.readInteractionIndex(this.gl, this.mouseX, this.mouseY);
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.visualizationScene, this.camera);
     } else {
@@ -145,7 +142,7 @@ export class Tree {
       const visualizationMesh = visualizationGroup.children[0];
       interactionMesh.material = this.createInteractionMaterial();
       interactionMesh.material.uniforms.interactionIndex.value = encodeInteractionIndex(interactionMesh.id);
-      visualizationMesh.material = new THREE.MeshLambertMaterial({color: this.displayColor});
+      visualizationMesh.material =  this.createVisualizationMaterial();
       this.setInteractionToVisualizationGroupMapping(interactionGroup, visualizationGroup);
       parentInteractionGroup.add(interactionGroup);
       parentVisualizationGroup.add(visualizationGroup);
@@ -188,7 +185,7 @@ export class Tree {
       branchMesh = new THREE.Mesh(this.sharedGeometry, this.createInteractionMaterial());
       branchMesh.material.uniforms.interactionIndex.value = encodeInteractionIndex(branchMesh.id);
     } else {
-      branchMesh = new THREE.Mesh(this.sharedGeometry, new THREE.MeshLambertMaterial({color: this.displayColor, transparent: true}));
+      branchMesh = new THREE.Mesh(this.sharedGeometry, this.createVisualizationMaterial());
     }
     branchMesh.scale.set(Math.pow(this.levelRadiusShrinkFactor, level), Math.pow(this.levelHeightShrinkFactor, level), Math.pow(this.levelRadiusShrinkFactor, level));
 
@@ -208,6 +205,10 @@ export class Tree {
     	vertexShader: interactionVertexShader,
     	fragmentShader: interactionFragmentShader
     });
+  }
+
+  createVisualizationMaterial() {
+    return new THREE.MeshLambertMaterial({color: this.displayColor, transparent: true});
   }
 
   readInteractionIndex(gl, x, y) {

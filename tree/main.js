@@ -10,6 +10,16 @@ let mouseNDC = new THREE.Vector2();
 
 let showVisualization = true;
 
+const VisualizationMode = {
+  ADD: "add",
+  SELECT: "select"
+};
+
+let visualizationController = {
+  showVisualization: true,
+  visualizationMode: VisualizationMode.ADD
+};
+
 function setUpGui() {
   const gui = new dat.GUI({name: 'Tree Parameters'});
   const growButton = {
@@ -25,6 +35,7 @@ function setUpGui() {
 
   gui.add(growButton,'grow');
   gui.add(toggleInteractionButtion,'toggle');
+  gui.add(visualizationController, 'visualizationMode', {add: VisualizationMode.ADD, select: VisualizationMode.SELECT});
 }
 
 function setupRenderingEnvironment() {
@@ -46,6 +57,12 @@ window.onload = () => {
     controls.update();
     raycaster.setFromCamera(mouseNDC, camera);
     tree.render(showVisualization);
+
+    if (visualizationController.visualizationMode === VisualizationMode.ADD) {
+      tree.performGrowBranchInteraction();
+    } else {
+      tree.performHoveredInteraction();
+    }
   };
 
   document.addEventListener('mousemove', (event) => {
@@ -55,11 +72,15 @@ window.onload = () => {
   });
 
   document.addEventListener('keydown', (event) => {
-    if (event.keyCode === 87) {
-      tree.rotateFloatingBranch(0.1);
-    }
-    if (event.keyCode === 83) {
-      tree.rotateFloatingBranch(-0.1);
+    if (visualizationController.visualizationMode === VisualizationMode.ADD) {
+      if (event.keyCode === 87) {
+        event.preventDefault();
+        tree.rotateFloatingBranch(0.1);
+      }
+      if (event.keyCode === 83) {
+        event.preventDefault();
+        tree.rotateFloatingBranch(-0.1);
+      }
     }
   });
 
