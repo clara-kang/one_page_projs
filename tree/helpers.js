@@ -39,7 +39,7 @@ export function getLowestLevelGroups(rootGroup) {
 
 export function applyFunctionToGroup(group, callback) {
   const stack = [];
-  stack.push(visualizationGroup);
+  stack.push(group);
 
   while (stack.length > 0) {
     const group = stack.pop();
