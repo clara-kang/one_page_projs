@@ -15,7 +15,7 @@ export class Tree {
   floatingBranchGroup;
   interactionRootGroup;
   visualizationRootGroup;
-  lastHoveredGroup;
+  lastHoveredVisualizationGroup;
   interactionScene = new THREE.Scene();
   visualizationScene = new THREE.Scene();
   interactionToVisualizationGroupMap = new Map();
@@ -64,15 +64,15 @@ export class Tree {
 
   performHoveredInteraction() {
     if (typeof this.mouseX !== 'undefined' && typeof this.mouseX !== 'undefined') {
-      if (this.lastHoveredGroup) {
-        this.changeVisualizationGroupColorAndOpacity(this.lastHoveredGroup, this.displayColor, 1);
-        this.lastHoveredGroup = null;
+      if (this.lastHoveredVisualizationGroup) {
+        this.changeVisualizationGroupColorAndOpacity(this.lastHoveredVisualizationGroup, this.displayColor, 1);
+        this.lastHoveredVisualizationGroup = null;
       }
       if (this.interactionIndex) {
         const meshHovered = this.interactionRootGroup.getObjectById(this.interactionIndex);
         const visualizationGroupHovered = this.interactionToVisualizationGroupMap.get(meshHovered.parent);
         this.changeVisualizationGroupColorAndOpacity(visualizationGroupHovered, this.hoveredColor, 0.5);
-        this.lastHoveredGroup = visualizationGroupHovered;
+        this.lastHoveredVisualizationGroup = visualizationGroupHovered;
       }
     }
   }
@@ -107,6 +107,14 @@ export class Tree {
   rotateFloatingBranch(angle) {
     if (this.floatingBranchGroup.parent) {
       this.floatingBranchGroup.rotation.y += angle;
+    }
+  }
+
+  rotateHoveredBranch(angle) {
+    if (this.lastHoveredVisualizationGroup) {
+      this.lastHoveredVisualizationGroup.rotation.y += angle;
+      const lastHoverediInteractionGroup = this.visualizationToInteractionGroupMap.get(this.lastHoveredVisualizationGroup);
+      lastHoverediInteractionGroup.rotation.y += angle;
     }
   }
 

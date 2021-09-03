@@ -7,8 +7,10 @@ let renderer;
 let tree;
 const raycaster = new THREE.Raycaster();
 let mouseNDC = new THREE.Vector2();
+let branchRotationTimer;
 
 let showVisualization = true;
+let branchSelected = false;
 
 const VisualizationMode = {
   ADD: "add",
@@ -61,7 +63,9 @@ window.onload = () => {
     if (visualizationController.visualizationMode === VisualizationMode.ADD) {
       tree.performGrowBranchInteraction();
     } else {
-      tree.performHoveredInteraction();
+      if (!branchSelected) {
+        tree.performHoveredInteraction();
+      }
     }
   };
 
@@ -85,7 +89,17 @@ window.onload = () => {
   });
 
   document.addEventListener('click', (event) => {
-    tree.attachFloatingBranch();
+    if (visualizationController.visualizationMode === VisualizationMode.ADD) {
+      tree.attachFloatingBranch();
+    } else if (tree.lastHoveredVisualizationGroup && !branchSelected) {
+      branchSelected = true;
+      branchRotationTimer = setInterval(() => {
+        tree.rotateHoveredBranch(0.1)
+      }, 100);
+    } else if (branchSelected) {
+      branchSelected = false;
+      clearInterval(branchRotationTimer);
+    }
   });
 
   window.onresize = () => {
