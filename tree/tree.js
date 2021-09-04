@@ -3,186 +3,188 @@ import {interactionVertexShader, interactionFragmentShader} from './shaders.js'
 import {encodeInteractionIndex, decodeInteractionIndex, getGroupLevel, getLowestLevelGroups, applyFunctionToGroup} from './helpers.js';
 
 export class Tree {
-  gl;
-  renderer;
-  raycaster;
-  camera;
-  mouseX;
-  mouseY;
-  interactionIndex
-  interactionRenderTarget;
-  sharedGeometry;
-  floatingBranchGroup;
-  interactionRootGroup;
-  visualizationRootGroup;
-  lastHoveredVisualizationGroup = null;
-  interactionScene = new THREE.Scene();
-  visualizationScene = new THREE.Scene();
-  interactionToVisualizationGroupMap = new Map();
-  visualizationToInteractionGroupMap = new Map();
-  levelHeightShrinkFactor = 0.6;
-  levelRadiusShrinkFactor = 0.5;
-  branchDeviationFactor = 0.2;
-  branchGrowingPortion = 0.8;
-  displayColor = 0xffff00;
-  hoveredColor = 0x00ccff;
-  transparentOpacity = 0.5;
+  _gl;
+  _renderer;
+  _raycaster;
+  _camera;
+  _mouseX;
+  _mouseY;
+  _interactionIndex;
+  _interactionRenderTarget;
+  _sharedGeometry;
+  _floatingBranchGroup;
+  _interactionRootGroup;
+  _visualizationRootGroup;
+  _lastHoveredVisualizationGroup = null;
+  _interactionScene = new THREE.Scene();
+  _visualizationScene = new THREE.Scene();
+  _rendererSize = new THREE.Vector2();
+  _interactionToVisualizationGroupMap = new Map();
+  _visualizationToInteractionGroupMap = new Map();
+  _visualizationMaterial = new THREE.MeshLambertMaterial({color: Tree.displayColor});
+  _hoverMaterial = new THREE.MeshLambertMaterial({color: Tree.hoveredColor, transparent: true, opacity: Tree.transparentOpacity});
+  _floatingBranchMaterial = new THREE.MeshLambertMaterial({color: Tree.hoveredColor, transparent: true, opacity: Tree.transparentOpacity});
 
-  visualizationMaterial = new THREE.MeshLambertMaterial({color: this.displayColor});
-  hoverMaterial = new THREE.MeshLambertMaterial({color: this.hoveredColor, transparent: true, opacity: this.transparentOpacity});
-  floatingBranchMaterial = new THREE.MeshLambertMaterial({color: this.hoveredColor, transparent: true, opacity: this.transparentOpacity});
+  static levelHeightShrinkFactor = 0.6;
+  static levelRadiusShrinkFactor = 0.5;
+  static branchDeviationFactor = 0.2;
+  static branchGrowingPortion = 0.8;
+  static displayColor = 0xffff00;
+  static hoveredColor = 0x00ccff;
+  static transparentOpacity = 0.5;
 
   constructor(renderer, raycaster, camera) {
-    this.renderer = renderer;
-    this.raycaster = raycaster;
-    this.camera = camera;
-    this.interactionRenderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+    renderer.getSize(this._rendererSize);
+    this._renderer = renderer;
+    this._raycaster = raycaster;
+    this._camera = camera;
+    this._interactionRenderTarget = new THREE.WebGLRenderTarget(this._rendererSize.x, this._rendererSize.y, {
         format: THREE.RGBAFormat,
         type: THREE.FloatType
     });
-    this.gl = renderer.getContext({antialias:false});
-    this.sharedGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 10);
-    this.sharedGeometry.translate(0, 0.5, 0);
+    this._gl = renderer.getContext({antialias:false});
+    this._sharedGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 10);
+    this._sharedGeometry.translate(0, 0.5, 0);
 
-    this.floatingBranchGroup = new THREE.Group();
-    this.floatingBranchGroup.add(new THREE.Mesh(this.sharedGeometry, this.floatingBranchMaterial));
-    this.floatingBranchGroup.rotateZ(-Math.PI / 3);
+    this._floatingBranchGroup = new THREE.Group();
+    this._floatingBranchGroup.add(new THREE.Mesh(this._sharedGeometry, this._floatingBranchMaterial));
+    this._floatingBranchGroup.rotateZ(-Math.PI / 3);
 
-    this.interactionRootGroup = new THREE.Group();
-    this.interactionRootGroup.add(this.createBranchMesh(0, true));
-    this.interactionScene.add(this.interactionRootGroup);
-    this.interactionScene.translateY(-0.5);
+    this._interactionRootGroup = new THREE.Group();
+    this._interactionRootGroup.add(this._createBranchMesh(0, true));
+    this._interactionScene.add(this._interactionRootGroup);
+    this._interactionScene.translateY(-0.5);
 
-    this.visualizationRootGroup = new THREE.Group();
-    this.visualizationRootGroup.add(this.createBranchMesh(0, false));
-    this.visualizationScene.add(this.visualizationRootGroup);
-    this.visualizationScene.add(new THREE.HemisphereLight(0xffffbb, 0x080820, 1));
-    this.visualizationScene.translateY(-0.5);
+    this._visualizationRootGroup = new THREE.Group();
+    this._visualizationRootGroup.add(this._createBranchMesh(0, false));
+    this._visualizationScene.add(this._visualizationRootGroup);
+    this._visualizationScene.add(new THREE.HemisphereLight(0xffffbb, 0x080820, 1));
+    this._visualizationScene.translateY(-0.5);
 
-    this.setInteractionToVisualizationGroupMapping(this.interactionRootGroup, this.visualizationRootGroup);
+    this._setInteractionToVisualizationGroupMapping(this._interactionRootGroup, this._visualizationRootGroup);
   }
 
   growAnotherLevel() {
-    const lowestLevelGroups = getLowestLevelGroups(this.interactionRootGroup);
+    const lowestLevelGroups = getLowestLevelGroups(this._interactionRootGroup);
     for (const interactionGroup of lowestLevelGroups) {
-      const visualizationGroup = this.interactionToVisualizationGroupMap.get(interactionGroup);
-      this.growBranchesOnGroup(interactionGroup, visualizationGroup, 2 + Math.floor(Math.random() * 5), 0.2, getGroupLevel(interactionGroup) + 1);
+      const visualizationGroup = this._interactionToVisualizationGroupMap.get(interactionGroup);
+      this._growBranchesOnGroup(interactionGroup, visualizationGroup, 2 + Math.floor(Math.random() * 5), 0.2, getGroupLevel(interactionGroup) + 1);
     }
   }
 
   performHoveredInteraction() {
-    if (typeof this.mouseX !== 'undefined' && typeof this.mouseX !== 'undefined') {
-      if (this.lastHoveredVisualizationGroup) {
-        this.changeGroupMaterialToVisualization(this.lastHoveredVisualizationGroup, this.displayColor, 1);
-        this.lastHoveredVisualizationGroup = null;
+    if (typeof this._mouseX !== 'undefined' && typeof this._mouseX !== 'undefined') {
+      if (this._lastHoveredVisualizationGroup) {
+        this._changeGroupMaterialToVisualization(this._lastHoveredVisualizationGroup);
+        this._lastHoveredVisualizationGroup = null;
       }
-      if (this.interactionIndex) {
-        const meshHovered = this.interactionRootGroup.getObjectById(this.interactionIndex);
-        const visualizationGroupHovered = this.interactionToVisualizationGroupMap.get(meshHovered.parent);
-        this.changeGroupMaterialToHover(visualizationGroupHovered);
-        this.lastHoveredVisualizationGroup = visualizationGroupHovered;
+      if (this._interactionIndex) {
+        const meshHovered = this._interactionRootGroup.getObjectById(this._interactionIndex);
+        const visualizationGroupHovered = this._interactionToVisualizationGroupMap.get(meshHovered.parent);
+        this._changeGroupMaterialToHover(visualizationGroupHovered);
+        this._lastHoveredVisualizationGroup = visualizationGroupHovered;
       }
     }
   }
 
   performGrowBranchInteraction() {
-    if (this.mouseX && this.mouseX) {
-      if (this.interactionIndex) {
-        const meshHovered = this.interactionRootGroup.getObjectById(this.interactionIndex);
-        const intersects = this.raycaster.intersectObject(meshHovered);
+    if (this._mouseX && this._mouseX) {
+      if (this._interactionIndex) {
+        const meshHovered = this._interactionRootGroup.getObjectById(this._interactionIndex);
+        const intersects = this._raycaster.intersectObject(meshHovered);
         if (intersects.length > 0) {
           const parentInteractionGroup = meshHovered.parent;
-          const parentVisualizationGroup = this.interactionToVisualizationGroupMap.get(meshHovered.parent);
-          parentVisualizationGroup.add(this.floatingBranchGroup);
+          const parentVisualizationGroup = this._interactionToVisualizationGroupMap.get(meshHovered.parent);
+          parentVisualizationGroup.add(this._floatingBranchGroup);
 
-          const level = getGroupLevel(this.floatingBranchGroup);
-          this.applyLevelScaling(this.floatingBranchGroup.children[0], level);
+          const level = getGroupLevel(this._floatingBranchGroup);
+          Tree.applyLevelScaling(this._floatingBranchGroup.children[0], level);
           const intersectionPointLocal = parentInteractionGroup.worldToLocal(intersects[0].point.clone());
-          this.floatingBranchGroup.position.set(0, intersectionPointLocal.y, 0);
-          this.floatingBranchGroup.visible = true;
+          this._floatingBranchGroup.position.set(0, intersectionPointLocal.y, 0);
+          this._floatingBranchGroup.visible = true;
         }
       } else {
-        if (this.floatingBranchGroup.parent) {
-          this.floatingBranchGroup.parent.remove(this.floatingBranchGroup);
+        if (this._floatingBranchGroup.parent) {
+          this._floatingBranchGroup.parent.remove(this._floatingBranchGroup);
         }
-        this.floatingBranchGroup.visible = false;
+        this._floatingBranchGroup.visible = false;
       }
     }
   }
 
   hasHoveredVisualizationGroup() {
-    return this.lastHoveredVisualizationGroup !== null;
+    return this._lastHoveredVisualizationGroup !== null;
   }
 
   rotateFloatingBranch(angle) {
-    if (this.floatingBranchGroup.parent) {
-      this.floatingBranchGroup.rotation.y += angle;
+    if (this._floatingBranchGroup.parent) {
+      this._floatingBranchGroup.rotation.y += angle;
     }
   }
 
   rotateHoveredBranch(angle) {
-    if (this.lastHoveredVisualizationGroup) {
-      this.lastHoveredVisualizationGroup.rotation.y += angle;
-      const lastHoverediInteractionGroup = this.visualizationToInteractionGroupMap.get(this.lastHoveredVisualizationGroup);
+    if (this._lastHoveredVisualizationGroup) {
+      this._lastHoveredVisualizationGroup.rotation.y += angle;
+      const lastHoverediInteractionGroup = this._visualizationToInteractionGroupMap.get(this._lastHoveredVisualizationGroup);
       lastHoverediInteractionGroup.rotation.y += angle;
     }
   }
 
   render(showVisualization = true) {
     if (showVisualization) {
-      this.renderer.setRenderTarget(this.interactionRenderTarget);
-      this.renderer.render(this.interactionScene, this.camera);
-      // this.performGrowBranchInteraction();
-      this.interactionIndex = this.readInteractionIndex(this.gl, this.mouseX, this.mouseY);
-      this.renderer.setRenderTarget(null);
-      this.renderer.render(this.visualizationScene, this.camera);
+      this._renderer.setRenderTarget(this._interactionRenderTarget);
+      this._renderer.render(this._interactionScene, this._camera);
+      this._interactionIndex = Tree.readInteractionIndex(this._gl, this._rendererSize.y, this._mouseX, this._mouseY);
+      this._renderer.setRenderTarget(null);
+      this._renderer.render(this._visualizationScene, this._camera);
     } else {
-      this.renderer.render(this.interactionScene, this.camera);
+      this._renderer.render(this._interactionScene, this._camera);
     }
   }
 
-  resize(windowWidth, windowHeight) {
-    this.interactionRenderTarget.setSize(windowWidth, windowHeight);
+  updateRendererSize() {
+    this._renderer.getSize(this._rendererSize);
+    this._interactionRenderTarget.setSize(this._rendererSize.x, this._rendererSize.y);
   }
 
   setMousePosition(mouseX, mouseY) {
-    this.mouseX = mouseX;
-    this.mouseY = mouseY;
+    this._mouseX = mouseX;
+    this._mouseY = mouseY;
   }
 
   attachFloatingBranch() {
-    if (this.floatingBranchGroup.parent && this.floatingBranchGroup.visible) {
-      const parentVisualizationGroup = this.floatingBranchGroup.parent;
-      const parentInteractionGroup = this.visualizationToInteractionGroupMap.get(parentVisualizationGroup);
-      const interactionGroup = this.floatingBranchGroup.clone();
-      const visualizationGroup = this.floatingBranchGroup.clone();
+    if (this._floatingBranchGroup.parent && this._floatingBranchGroup.visible) {
+      const parentVisualizationGroup = this._floatingBranchGroup.parent;
+      const parentInteractionGroup = this._visualizationToInteractionGroupMap.get(parentVisualizationGroup);
+      const interactionGroup = this._floatingBranchGroup.clone();
+      const visualizationGroup = this._floatingBranchGroup.clone();
       const interactionMesh = interactionGroup.children[0];
       const visualizationMesh = visualizationGroup.children[0];
-      interactionMesh.material = this.createInteractionMaterial();
+      interactionMesh.material = Tree.createInteractionMaterial();
       interactionMesh.material.uniforms.interactionIndex.value = encodeInteractionIndex(interactionMesh.id);
-      visualizationMesh.material = this.visualizationMaterial;
-      this.setInteractionToVisualizationGroupMapping(interactionGroup, visualizationGroup);
+      visualizationMesh.material = this._visualizationMaterial;
+      this._setInteractionToVisualizationGroupMapping(interactionGroup, visualizationGroup);
       parentInteractionGroup.add(interactionGroup);
       parentVisualizationGroup.add(visualizationGroup);
     }
   }
 
-  changeGroupMaterialToHover(visualizationGroup) {
+  _changeGroupMaterialToHover(visualizationGroup) {
       applyFunctionToGroup(visualizationGroup, (group) => {
-        group.children[0].material = this.hoverMaterial;
+        group.children[0].material = this._hoverMaterial;
       });
   }
 
-  changeGroupMaterialToVisualization(visualizationGroup) {
+  _changeGroupMaterialToVisualization(visualizationGroup) {
     applyFunctionToGroup(visualizationGroup, (group) => {
-      group.children[0].material = this.visualizationMaterial;
+      group.children[0].material = this._visualizationMaterial;
     });
   }
 
-  growBranchesOnGroup(parentInteractionGroup, parentVisualizationGroup, branchNumber, branchDeviationFactor, level) {
+  _growBranchesOnGroup(parentInteractionGroup, parentVisualizationGroup, branchNumber, branchDeviationFactor, level) {
     const parentBranchLength = parentInteractionGroup.children[0].scale.y;
-    const notGrowingLength = parentBranchLength * (1 - this.branchGrowingPortion);
-    const segmentLength = parentBranchLength * this.branchGrowingPortion / branchNumber;
+    const notGrowingLength = parentBranchLength * (1 - Tree.branchGrowingPortion);
+    const segmentLength = parentBranchLength * Tree.branchGrowingPortion / branchNumber;
     const yRotationOffset = Math.PI * 2 * branchDeviationFactor * Math.random() / branchNumber;
 
     for (let branchId = 0; branchId < branchNumber; ++branchId) {
@@ -194,36 +196,36 @@ export class Tree {
 
       const visualizationBranchGroup = interactionBranchGroup.clone();
 
-      interactionBranchGroup.add(this.createBranchMesh(level, true));
-      visualizationBranchGroup.add(this.createBranchMesh(level, false));
-      this.setInteractionToVisualizationGroupMapping(interactionBranchGroup, visualizationBranchGroup);
+      interactionBranchGroup.add(this._createBranchMesh(level, true));
+      visualizationBranchGroup.add(this._createBranchMesh(level, false));
+      this._setInteractionToVisualizationGroupMapping(interactionBranchGroup, visualizationBranchGroup);
       parentInteractionGroup.add(interactionBranchGroup);
       parentVisualizationGroup.add(visualizationBranchGroup);
     }
   }
 
-  createBranchMesh(level, isInteractionMesh) {
+  _createBranchMesh(level, isInteractionMesh) {
     let branchMesh;
     if (isInteractionMesh) {
-      branchMesh = new THREE.Mesh(this.sharedGeometry, this.createInteractionMaterial());
+      branchMesh = new THREE.Mesh(this._sharedGeometry, Tree.createInteractionMaterial());
       branchMesh.material.uniforms.interactionIndex.value = encodeInteractionIndex(branchMesh.id);
     } else {
-      branchMesh = new THREE.Mesh(this.sharedGeometry, this.visualizationMaterial);
+      branchMesh = new THREE.Mesh(this._sharedGeometry, this._visualizationMaterial);
     }
-    this.applyLevelScaling(branchMesh, level);
+    Tree.applyLevelScaling(branchMesh, level);
     return branchMesh;
   }
 
-  setInteractionToVisualizationGroupMapping(interactionBranchGroup, visualizationBranchGroup) {
-    this.interactionToVisualizationGroupMap.set(interactionBranchGroup, visualizationBranchGroup);
-    this.visualizationToInteractionGroupMap.set(visualizationBranchGroup, interactionBranchGroup);
+  _setInteractionToVisualizationGroupMapping(interactionBranchGroup, visualizationBranchGroup) {
+    this._interactionToVisualizationGroupMap.set(interactionBranchGroup, visualizationBranchGroup);
+    this._visualizationToInteractionGroupMap.set(visualizationBranchGroup, interactionBranchGroup);
   }
 
-  applyLevelScaling(object, level) {
-    object.scale.set(Math.pow(this.levelRadiusShrinkFactor, level), Math.pow(this.levelHeightShrinkFactor, level), Math.pow(this.levelRadiusShrinkFactor, level));
+  static applyLevelScaling(object, level) {
+    object.scale.set(Math.pow(Tree.levelRadiusShrinkFactor, level), Math.pow(Tree.levelHeightShrinkFactor, level), Math.pow(Tree.levelRadiusShrinkFactor, level));
   }
 
-  createInteractionMaterial() {
+  static createInteractionMaterial() {
     return new THREE.RawShaderMaterial({
     	uniforms: {
     		interactionIndex: {value: 0}
@@ -233,9 +235,9 @@ export class Tree {
     });
   }
 
-  readInteractionIndex(gl, x, y) {
+  static readInteractionIndex(gl, rendererHeight, x, y) {
     const pixelData = new Float32Array(4);
-    this.gl.readPixels(x, window.innerHeight-y-1, 1, 1, gl.RGBA, gl.FLOAT, pixelData);
+    gl.readPixels(x, rendererHeight - y - 1, 1, 1, gl.RGBA, gl.FLOAT, pixelData);
 
     return decodeInteractionIndex(pixelData);
   }

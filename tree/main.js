@@ -104,7 +104,7 @@ window.onload = () => {
   window.onresize = () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
-    tree.resize(window.innerWidth, window.innerHeight);
+    tree.updateRendererSize();
     camera.updateProjectionMatrix();
   }
   setUpGui();
