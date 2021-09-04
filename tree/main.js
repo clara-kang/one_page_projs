@@ -5,108 +5,115 @@ import {Tree} from './tree.js';
 let camera;
 let renderer;
 let tree;
+let mouseX;
+let mouseY;
 let branchRotationTimer;
-let showVisualization = true;
 let branchSelected = false;
 
 const raycaster = new THREE.Raycaster();
-const mouseNDC = new THREE.Vector2();
 
 const VisualizationMode = {
-  ADD: "add",
-  SELECT: "select"
+    ADD: "add",
+    SELECT: "select"
 };
 
-let visualizationController = {
-  showVisualization: true,
-  visualizationMode: VisualizationMode.ADD
-};
-
-function setUpGui() {
-  const gui = new dat.GUI({name: 'Tree Parameters'});
-  const growButton = {
-    grow: () => {
-      tree.growAnotherLevel()
-    }
-  };
-  const toggleInteractionButtion = {
-    toggle: () => {
-      showVisualization = !showVisualization;
-    }
-  };
-
-  gui.add(growButton,'grow');
-  gui.add(toggleInteractionButtion,'toggle');
-  gui.add(visualizationController, 'visualizationMode', {add: VisualizationMode.ADD, select: VisualizationMode.SELECT});
+const RenderMode = {
+    VISUALIZATION: "visualization",
+    INDEX: "index"
 }
 
-function setupCameraAndRenderer() {
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 2, 1.5);
-  renderer = new THREE.WebGLRenderer();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+const operationController = {
+    operation: VisualizationMode.ADD
+};
+
+const renderModeController = {
+    renderMode: RenderMode.VISUALIZATION
+}
+
+
+function setupGui() {
+    const gui = new dat.GUI({name: 'Tree Parameters', width: 300});
+    const growButton = {
+        growTree: () => {
+            tree.growAnotherLevel()
+        }
+    };
+
+    gui.add(growButton, 'growTree').name('grow tree (click me!)');
+    gui.add(renderModeController, 'renderMode', {
+        visualization: RenderMode.VISUALIZATION,
+        index: RenderMode.INDEX
+    });
+    gui.add(operationController, 'operation', {add: VisualizationMode.ADD, select: VisualizationMode.SELECT});
+}
+
+function setupRenderer() {
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 2, 1.5);
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 }
 
 window.onload = () => {
-  setupCameraAndRenderer();
-  tree = new Tree(renderer, raycaster, camera);
+    setupRenderer();
+    tree = new Tree(renderer, raycaster, camera);
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  const animate = function () {
-  	requestAnimationFrame(animate);
-    controls.update();
-    raycaster.setFromCamera(mouseNDC, camera);
-    tree.render(showVisualization);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    const render = function () {
+        requestAnimationFrame(render);
+        controls.update();
+        tree.render(renderModeController.renderMode === RenderMode.VISUALIZATION, mouseX, mouseY);
 
-    if (visualizationController.visualizationMode === VisualizationMode.ADD) {
-      tree.performGrowBranchInteraction();
-    } else {
-      if (!branchSelected) {
-        tree.performHoveredInteraction();
-      }
+        if (operationController.operation === VisualizationMode.ADD) {
+            tree.performGrowBranchInteraction();
+        } else if (!branchSelected) {
+            tree.performHoveredInteraction(mouseX, mouseY);
+        }
+    };
+
+    document.addEventListener('mousemove', (event) => {
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+        raycaster.setFromCamera(
+            new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1),
+            camera
+        );
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (operationController.operation === VisualizationMode.ADD) {
+            if (event.code === 'KeyA') {
+                event.preventDefault();
+                tree.rotatePotentialBranch(0.1);
+            }
+            if (event.code === 'KeyD') {
+                event.preventDefault();
+                tree.rotatePotentialBranch(-0.1);
+            }
+        }
+    });
+
+    document.addEventListener('click', () => {
+        if (operationController.operation === VisualizationMode.ADD) {
+            tree.attachPotentialBranch();
+        } else if (tree.hasHoveredVisualizationGroup() && !branchSelected) {
+            branchSelected = true;
+            branchRotationTimer = setInterval(() => {
+                tree.rotateHoveredBranch(0.1)
+            }, 100);
+        } else if (branchSelected) {
+            branchSelected = false;
+            clearInterval(branchRotationTimer);
+        }
+    });
+
+    window.onresize = () => {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / window.innerHeight;
+        tree.updateRenderTargetSize();
+        camera.updateProjectionMatrix();
     }
-  };
-
-  document.addEventListener('mousemove', (event) => {
-    tree.setMousePosition(event.clientX, event.clientY);
-    mouseNDC.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouseNDC.y = -(event.clientY / window.innerHeight) * 2 + 1;
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (visualizationController.visualizationMode === VisualizationMode.ADD) {
-      if (event.keyCode === 87) {
-        event.preventDefault();
-        tree.rotateFloatingBranch(0.1);
-      }
-      if (event.keyCode === 83) {
-        event.preventDefault();
-        tree.rotateFloatingBranch(-0.1);
-      }
-    }
-  });
-
-  document.addEventListener('click', (event) => {
-    if (visualizationController.visualizationMode === VisualizationMode.ADD) {
-      tree.attachFloatingBranch();
-    } else if (tree.hasHoveredVisualizationGroup() && !branchSelected) {
-      branchSelected = true;
-      branchRotationTimer = setInterval(() => {
-        tree.rotateHoveredBranch(0.1)
-      }, 100);
-    } else if (branchSelected) {
-      branchSelected = false;
-      clearInterval(branchRotationTimer);
-    }
-  });
-
-  window.onresize = () => {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    camera.aspect = window.innerWidth / window.innerHeight;
-    tree.updateRendererSize();
-    camera.updateProjectionMatrix();
-  }
-  setUpGui();
-  animate();
+    setupGui();
+    render();
 }
