@@ -27,6 +27,10 @@ export class Tree {
   displayColor = 0xffff00;
   hoveredColor = 0x00ccff;
 
+  visualizationMaterial = new THREE.MeshLambertMaterial({color: this.displayColor});
+  hoverMaterial = new THREE.MeshLambertMaterial({color: this.hoveredColor, transparent: true, opacity: 0.5});
+  floatingBranchMaterial = new THREE.MeshLambertMaterial({color: this.hoveredColor, transparent: true, opacity: 0.5});
+
   constructor(renderer, raycaster, camera) {
     this.renderer = renderer;
     this.raycaster = raycaster;
@@ -40,7 +44,7 @@ export class Tree {
     this.sharedGeometry.translate(0, 0.5, 0);
 
     this.floatingBranchGroup = new THREE.Group();
-    this.floatingBranchGroup.add(new THREE.Mesh(this.sharedGeometry, new THREE.MeshLambertMaterial({color: 0xccff99, transparent: true, opacity: 0.5})));
+    this.floatingBranchGroup.add(new THREE.Mesh(this.sharedGeometry, this.floatingBranchMaterial));
     this.floatingBranchGroup.rotateZ(-Math.PI / 3);
 
     this.interactionRootGroup = new THREE.Group();
@@ -65,13 +69,13 @@ export class Tree {
   performHoveredInteraction() {
     if (typeof this.mouseX !== 'undefined' && typeof this.mouseX !== 'undefined') {
       if (this.lastHoveredVisualizationGroup) {
-        this.changeVisualizationGroupColorAndOpacity(this.lastHoveredVisualizationGroup, this.displayColor, 1);
+        this.changeGroupMaterialToVisualization(this.lastHoveredVisualizationGroup, this.displayColor, 1);
         this.lastHoveredVisualizationGroup = null;
       }
       if (this.interactionIndex) {
         const meshHovered = this.interactionRootGroup.getObjectById(this.interactionIndex);
         const visualizationGroupHovered = this.interactionToVisualizationGroupMap.get(meshHovered.parent);
-        this.changeVisualizationGroupColorAndOpacity(visualizationGroupHovered, this.hoveredColor, 0.5);
+        this.changeGroupMaterialToHover(visualizationGroupHovered, this.hoveredColor, 0.5);
         this.lastHoveredVisualizationGroup = visualizationGroupHovered;
       }
     }
@@ -150,18 +154,25 @@ export class Tree {
       const visualizationMesh = visualizationGroup.children[0];
       interactionMesh.material = this.createInteractionMaterial();
       interactionMesh.material.uniforms.interactionIndex.value = encodeInteractionIndex(interactionMesh.id);
-      visualizationMesh.material =  this.createVisualizationMaterial();
+      visualizationMesh.material = this.visualizationMaterial;
       this.setInteractionToVisualizationGroupMapping(interactionGroup, visualizationGroup);
       parentInteractionGroup.add(interactionGroup);
       parentVisualizationGroup.add(visualizationGroup);
     }
   }
 
-  changeVisualizationGroupColorAndOpacity(visualizationGroup, color, opacity) {
+  changeGroupMaterialToHover(visualizationGroup, color, opacity) {
       applyFunctionToGroup(visualizationGroup, (group) => {
-        group.children[0].material.color.setHex(color);
-        group.children[0].material.opacity = opacity;
+        // group.children[0].material.color.setHex(color);
+        // group.children[0].material.opacity = opacity;
+        group.children[0].material = this.hoverMaterial;
       });
+  }
+
+  changeGroupMaterialToVisualization(visualizationGroup) {
+    applyFunctionToGroup(visualizationGroup, (group) => {
+      group.children[0].material = this.visualizationMaterial;
+    });
   }
 
   growBranchesOnGroup(parentInteractionGroup, parentVisualizationGroup, branchNumber, branchDeviationFactor, level) {
@@ -193,7 +204,7 @@ export class Tree {
       branchMesh = new THREE.Mesh(this.sharedGeometry, this.createInteractionMaterial());
       branchMesh.material.uniforms.interactionIndex.value = encodeInteractionIndex(branchMesh.id);
     } else {
-      branchMesh = new THREE.Mesh(this.sharedGeometry, this.createVisualizationMaterial());
+      branchMesh = new THREE.Mesh(this.sharedGeometry, this.visualizationMaterial);
     }
     branchMesh.scale.set(Math.pow(this.levelRadiusShrinkFactor, level), Math.pow(this.levelHeightShrinkFactor, level), Math.pow(this.levelRadiusShrinkFactor, level));
 
@@ -213,10 +224,6 @@ export class Tree {
     	vertexShader: interactionVertexShader,
     	fragmentShader: interactionFragmentShader
     });
-  }
-
-  createVisualizationMaterial() {
-    return new THREE.MeshLambertMaterial({color: this.displayColor, transparent: true});
   }
 
   readInteractionIndex(gl, x, y) {
