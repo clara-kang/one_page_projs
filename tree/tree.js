@@ -15,7 +15,7 @@ export class Tree {
   floatingBranchGroup;
   interactionRootGroup;
   visualizationRootGroup;
-  lastHoveredVisualizationGroup;
+  lastHoveredVisualizationGroup = null;
   interactionScene = new THREE.Scene();
   visualizationScene = new THREE.Scene();
   interactionToVisualizationGroupMap = new Map();
@@ -26,10 +26,11 @@ export class Tree {
   branchGrowingPortion = 0.8;
   displayColor = 0xffff00;
   hoveredColor = 0x00ccff;
+  transparentOpacity = 0.5;
 
   visualizationMaterial = new THREE.MeshLambertMaterial({color: this.displayColor});
-  hoverMaterial = new THREE.MeshLambertMaterial({color: this.hoveredColor, transparent: true, opacity: 0.5});
-  floatingBranchMaterial = new THREE.MeshLambertMaterial({color: this.hoveredColor, transparent: true, opacity: 0.5});
+  hoverMaterial = new THREE.MeshLambertMaterial({color: this.hoveredColor, transparent: true, opacity: this.transparentOpacity});
+  floatingBranchMaterial = new THREE.MeshLambertMaterial({color: this.hoveredColor, transparent: true, opacity: this.transparentOpacity});
 
   constructor(renderer, raycaster, camera) {
     this.renderer = renderer;
@@ -50,11 +51,14 @@ export class Tree {
     this.interactionRootGroup = new THREE.Group();
     this.interactionRootGroup.add(this.createBranchMesh(0, true));
     this.interactionScene.add(this.interactionRootGroup);
+    this.interactionScene.translateY(-0.5);
 
     this.visualizationRootGroup = new THREE.Group();
     this.visualizationRootGroup.add(this.createBranchMesh(0, false));
     this.visualizationScene.add(this.visualizationRootGroup);
     this.visualizationScene.add(new THREE.HemisphereLight(0xffffbb, 0x080820, 1));
+    this.visualizationScene.translateY(-0.5);
+
     this.setInteractionToVisualizationGroupMapping(this.interactionRootGroup, this.visualizationRootGroup);
   }
 
@@ -75,7 +79,7 @@ export class Tree {
       if (this.interactionIndex) {
         const meshHovered = this.interactionRootGroup.getObjectById(this.interactionIndex);
         const visualizationGroupHovered = this.interactionToVisualizationGroupMap.get(meshHovered.parent);
-        this.changeGroupMaterialToHover(visualizationGroupHovered, this.hoveredColor, 0.5);
+        this.changeGroupMaterialToHover(visualizationGroupHovered);
         this.lastHoveredVisualizationGroup = visualizationGroupHovered;
       }
     }
@@ -92,9 +96,7 @@ export class Tree {
           parentVisualizationGroup.add(this.floatingBranchGroup);
 
           const level = getGroupLevel(this.floatingBranchGroup);
-          this.floatingBranchGroup.children[0].scale
-            .set(Math.pow(this.levelRadiusShrinkFactor, level), Math.pow(this.levelHeightShrinkFactor, level), Math.pow(this.levelRadiusShrinkFactor, level));
-
+          this.applyLevelScaling(this.floatingBranchGroup.children[0], level);
           const intersectionPointLocal = parentInteractionGroup.worldToLocal(intersects[0].point.clone());
           this.floatingBranchGroup.position.set(0, intersectionPointLocal.y, 0);
           this.floatingBranchGroup.visible = true;
@@ -106,6 +108,10 @@ export class Tree {
         this.floatingBranchGroup.visible = false;
       }
     }
+  }
+
+  hasHoveredVisualizationGroup() {
+    return this.lastHoveredVisualizationGroup !== null;
   }
 
   rotateFloatingBranch(angle) {
@@ -161,10 +167,8 @@ export class Tree {
     }
   }
 
-  changeGroupMaterialToHover(visualizationGroup, color, opacity) {
+  changeGroupMaterialToHover(visualizationGroup) {
       applyFunctionToGroup(visualizationGroup, (group) => {
-        // group.children[0].material.color.setHex(color);
-        // group.children[0].material.opacity = opacity;
         group.children[0].material = this.hoverMaterial;
       });
   }
@@ -206,14 +210,17 @@ export class Tree {
     } else {
       branchMesh = new THREE.Mesh(this.sharedGeometry, this.visualizationMaterial);
     }
-    branchMesh.scale.set(Math.pow(this.levelRadiusShrinkFactor, level), Math.pow(this.levelHeightShrinkFactor, level), Math.pow(this.levelRadiusShrinkFactor, level));
-
+    this.applyLevelScaling(branchMesh, level);
     return branchMesh;
   }
 
   setInteractionToVisualizationGroupMapping(interactionBranchGroup, visualizationBranchGroup) {
     this.interactionToVisualizationGroupMap.set(interactionBranchGroup, visualizationBranchGroup);
     this.visualizationToInteractionGroupMap.set(visualizationBranchGroup, interactionBranchGroup);
+  }
+
+  applyLevelScaling(object, level) {
+    object.scale.set(Math.pow(this.levelRadiusShrinkFactor, level), Math.pow(this.levelHeightShrinkFactor, level), Math.pow(this.levelRadiusShrinkFactor, level));
   }
 
   createInteractionMaterial() {

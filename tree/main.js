@@ -5,12 +5,12 @@ import {Tree} from './tree.js';
 let camera;
 let renderer;
 let tree;
-const raycaster = new THREE.Raycaster();
-let mouseNDC = new THREE.Vector2();
 let branchRotationTimer;
-
 let showVisualization = true;
 let branchSelected = false;
+
+const raycaster = new THREE.Raycaster();
+const mouseNDC = new THREE.Vector2();
 
 const VisualizationMode = {
   ADD: "add",
@@ -40,17 +40,16 @@ function setUpGui() {
   gui.add(visualizationController, 'visualizationMode', {add: VisualizationMode.ADD, select: VisualizationMode.SELECT});
 }
 
-function setupRenderingEnvironment() {
+function setupCameraAndRenderer() {
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.y = 1;
-  camera.position.z = 1.5;
+  camera.position.set(0, 2, 1.5);
   renderer = new THREE.WebGLRenderer();
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 }
 
 window.onload = () => {
-  setupRenderingEnvironment();
+  setupCameraAndRenderer();
   tree = new Tree(renderer, raycaster, camera);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -91,7 +90,7 @@ window.onload = () => {
   document.addEventListener('click', (event) => {
     if (visualizationController.visualizationMode === VisualizationMode.ADD) {
       tree.attachFloatingBranch();
-    } else if (tree.lastHoveredVisualizationGroup && !branchSelected) {
+    } else if (tree.hasHoveredVisualizationGroup() && !branchSelected) {
       branchSelected = true;
       branchRotationTimer = setInterval(() => {
         tree.rotateHoveredBranch(0.1)
