@@ -32,7 +32,7 @@ const renderModeController = {
 
 
 function setupGui() {
-    const gui = new dat.GUI({name: 'Tree Parameters', width: 300});
+    const gui = new dat.GUI({name: 'Tree Parameters', width: 400});
     const growButton = {
         growTree: () => {
             tree.growAnotherLevel()
@@ -44,6 +44,7 @@ function setupGui() {
         visualization: RenderMode.VISUALIZATION,
         index: RenderMode.INDEX
     });
+    gui.add(tree, 'childrenBranchNumber', 1, 10).step(1).name('children branch number');
     gui.add(operationController, 'operation', {add: VisualizationMode.ADD, select: VisualizationMode.SELECT});
 }
 

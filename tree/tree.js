@@ -3,6 +3,8 @@ import {interactionVertexShader, interactionFragmentShader} from './shaders.js'
 import {encodeInteractionIndex, decodeInteractionIndex, getGroupLevel, getLeafGroups, applyFunctionToGroup} from './helpers.js';
 
 export class Tree {
+    childrenBranchNumber = 2;
+
     _gl;
     _renderer;
     _raycaster;
@@ -67,7 +69,7 @@ export class Tree {
         const lowestLevelGroups = getLeafGroups(this._interactionRootGroup);
         for (const interactionGroup of lowestLevelGroups) {
             const visualizationGroup = this._interactionToVisualizationGroupMap.get(interactionGroup);
-            this._growBranchesOnGroup(interactionGroup, visualizationGroup, 2 + Math.floor(Math.random() * 5), 0.2, getGroupLevel(interactionGroup) + 1);
+            this._growBranchesOnGroup(interactionGroup, visualizationGroup, getGroupLevel(interactionGroup) + 1);
         }
     }
 
@@ -175,17 +177,17 @@ export class Tree {
         });
     }
 
-    _growBranchesOnGroup(parentInteractionGroup, parentVisualizationGroup, branchNumber, branchDeviationFactor, level) {
+    _growBranchesOnGroup(parentInteractionGroup, parentVisualizationGroup, level) {
         const parentBranchLength = parentInteractionGroup.children[0].scale.y;
         const notGrowingLength = parentBranchLength * (1 - Tree.branchGrowingPortion);
-        const segmentLength = parentBranchLength * Tree.branchGrowingPortion / branchNumber;
-        const yRotationOffset = Math.PI * 2 * branchDeviationFactor * Math.random() / branchNumber;
+        const segmentLength = parentBranchLength * Tree.branchGrowingPortion / this.childrenBranchNumber;
+        const yRotationOffset = Math.PI * 2 * Tree.branchDeviationFactor * Math.random() / this.childrenBranchNumber;
 
-        for (let branchId = 0; branchId < branchNumber; ++branchId) {
+        for (let branchId = 0; branchId < this.childrenBranchNumber; ++branchId) {
             const interactionBranchGroup = new THREE.Group();
 
-            interactionBranchGroup.translateY(notGrowingLength + segmentLength * (branchId + 0.5 + Math.random() * branchDeviationFactor));
-            interactionBranchGroup.rotateY(yRotationOffset + Math.PI * 2 * (1 + Math.random() * branchDeviationFactor) * branchId / branchNumber);
+            interactionBranchGroup.translateY(notGrowingLength + segmentLength * (branchId + 0.5 + Math.random() * Tree.branchDeviationFactor));
+            interactionBranchGroup.rotateY(yRotationOffset + Math.PI * 2 * (1 + Math.random() * Tree.branchDeviationFactor) * branchId / this.childrenBranchNumber);
             interactionBranchGroup.rotateZ(Math.PI / 3);
 
             const visualizationBranchGroup = interactionBranchGroup.clone();
