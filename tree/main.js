@@ -55,6 +55,22 @@ function setupRenderer() {
     document.body.appendChild(renderer.domElement);
 }
 
+function showWordsForAddOperation() {
+    if (tree.potentialBranchVisible()) {
+        document.getElementById("overlay").innerHTML = "use key A/D to rotate the branch, and click to place branch here!";
+    } else {
+        document.getElementById("overlay").innerHTML = "hover on a branch!";
+    }
+}
+
+function showWordsForSelectOperation() {
+    if (tree.hasHoveredVisualizationGroup()) {
+        document.getElementById("overlay").innerHTML = "click to rotate the brach!";
+    } else {
+        document.getElementById("overlay").innerHTML = "hover on a branch!";
+    }
+}
+
 window.onload = () => {
     setupRenderer();
     tree = new Tree(renderer, raycaster, camera);
@@ -67,8 +83,10 @@ window.onload = () => {
 
         if (operationController.operation === VisualizationMode.ADD) {
             tree.performGrowBranchInteraction();
+            showWordsForAddOperation();
         } else if (!branchSelected) {
             tree.performHoveredInteraction(mouseX, mouseY);
+            showWordsForSelectOperation();
         }
     };
 
@@ -102,6 +120,7 @@ window.onload = () => {
             branchRotationTimer = setInterval(() => {
                 tree.rotateHoveredBranch(0.1)
             }, 100);
+            document.getElementById("overlay").innerHTML = "click again to stop branch rotation!";
         } else if (branchSelected) {
             branchSelected = false;
             clearInterval(branchRotationTimer);

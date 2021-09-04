@@ -47,6 +47,7 @@ export class Tree {
         this._potentialBranchGroup = new THREE.Group();
         this._potentialBranchGroup.add(new THREE.Mesh(this._sharedGeometry, this._potentialBranchMaterial));
         this._potentialBranchGroup.rotateZ(-Math.PI / 3);
+        this._potentialBranchGroup.visible = false;
 
         this._interactionRootGroup = new THREE.Group();
         this._interactionRootGroup.add(this._createBranchMesh(0, true));
@@ -108,6 +109,10 @@ export class Tree {
 
     hasHoveredVisualizationGroup() {
         return this._lastHoveredVisualizationGroup !== null;
+    }
+
+    potentialBranchVisible() {
+        return this._potentialBranchGroup.visible;
     }
 
     rotatePotentialBranch(angle) {

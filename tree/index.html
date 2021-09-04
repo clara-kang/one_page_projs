@@ -4,29 +4,32 @@
 <body>
 <style type="text/css">
 body {
-  margin:0;
-  padding:0;
-  color: white;
+    margin: 0;
+    padding: 0;
 }
 
-#container {
-  position: relative;
-}
-#container canvas, #overlay {
+canvas, #overlay {
   position: absolute;
 }
 canvas {
-  border: 1px solid black;
-  display:block;
+    border: 1px solid black;
+    display:block;
+    z-index: 0;
+}
+#overlay {
+    color: white;
+    font-size: 20px;
+    padding: 10px;
+    z-index: 1;
 }
 </style>
 
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5/dat.gui.min.js"></script>
 <script type="module" src='./shaders.js'></script>
 <script type="module" src='./helpers.js'></script>
-<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5/dat.gui.min.js"></script>
 <script type="module" src='./main.js'></script>
 
-<div id="overlay">This div is over the canvas</div>
+<div id="overlay"></div>
 
 </body>
 </html>
