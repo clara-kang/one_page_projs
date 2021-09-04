@@ -57,7 +57,7 @@ function setupRenderer() {
 
 function showWordsForAddOperation() {
     if (tree.potentialBranchVisible()) {
-        document.getElementById("overlay").innerHTML = "use key A/D to rotate the branch, and click to place branch here!";
+        document.getElementById("overlay").innerHTML = "use key 1/2 to rotate the branch, and click to place branch here!";
     } else {
         document.getElementById("overlay").innerHTML = "hover on a branch!";
     }
@@ -100,13 +100,15 @@ window.onload = () => {
     });
 
     document.addEventListener('keydown', (event) => {
-        if (operationController.operation === VisualizationMode.ADD) {
-            if (event.code === 'KeyA') {
-                event.preventDefault();
+        if (event.code === 'Digit1') {
+            event.preventDefault();
+            if (operationController.operation === VisualizationMode.ADD) {
                 tree.rotatePotentialBranch(0.1);
             }
-            if (event.code === 'KeyD') {
-                event.preventDefault();
+        }
+        if (event.code === 'Digit2') {
+            event.preventDefault();
+            if (operationController.operation === VisualizationMode.ADD) {
                 tree.rotatePotentialBranch(-0.1);
             }
         }
