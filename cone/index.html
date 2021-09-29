@@ -1,0 +1,82 @@
+
+<!DOCTYPE html>
+<html>
+<body>
+<style type="text/css">
+body { margin:0; }
+</style>
+
+<script src='./shaders.js'></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5/dat.gui.min.js"></script>
+<script type="module">
+
+import * as THREE from 'https://unpkg.com/three@0.119.0/build/three.module.js';
+
+const imgSize = 332;
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(imgSize, imgSize);
+document.body.appendChild(renderer.domElement);
+const target1 = new THREE.WebGLRenderTarget(imgSize, imgSize, {
+  format: THREE.RedFormat,
+  type: THREE.FloatType
+});
+const target2 = new THREE.WebGLRenderTarget(imgSize, imgSize, {
+  format: THREE.RedFormat,
+  type: THREE.FloatType
+});
+
+const geometry = new THREE.PlaneGeometry(2, 2);
+const material = new THREE.RawShaderMaterial({
+  uniforms: {
+    heightTex: {value: null},
+    currentMap: {value: target1.texture},
+    dstUv: {value: new THREE.Vector2(0, 0)}
+  },
+  vertexShader: vertexShader,
+  fragmentShader: fragmentShader,
+  depthTest: false
+});
+const planeMesh = new THREE.Mesh(geometry, material);
+scene.add(planeMesh);
+camera.position.z = 1.5;
+
+renderer.setRenderTarget(target1);
+renderer.setClearColor(new THREE.Color(1.0, 1.0, 1.0), 1.0);
+renderer.clearColor()
+renderer.setRenderTarget(target2);
+renderer.setClearColor(new THREE.Color(1.0, 1.0, 1.0), 1.0);
+renderer.clearColor()
+
+const heightTexture = new THREE.TextureLoader().load("./depth_map_332.png", (texture) => {
+  material.uniforms.heightTex.value = texture;
+
+  let i = 0;
+  while (i < 332 * 332) {
+    renderer.setRenderTarget(target2);
+    renderer.render(scene, camera);
+    i++;
+    material.uniforms.dstUv.value.y = Math.floor(i / 332) / 332;
+    material.uniforms.dstUv.value.x = (i % 332) / 332;
+    renderer.setRenderTarget(target1);
+    material.uniforms.currentMap.value = target2.texture;
+    renderer.render(scene, camera);
+    i++;
+    material.uniforms.dstUv.value.y = Math.floor(i / 332) / 332;
+    material.uniforms.dstUv.value.x = (i % 332) / 332;
+    material.uniforms.currentMap.value = target1.texture;
+  }
+
+  renderer.setRenderTarget(null);
+  renderer.render(scene, camera);
+
+  console.log("done");
+
+}, (error) => {console.log("cannot load")});
+
+// renderer.render(scene, camera);
+
+</script>
+</body>
+</html>
