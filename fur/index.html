@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Some fur..</title>
+    <!-- Add any additional meta tags, stylesheets, or other head content here -->
+</head>
+<body>
+    <script src='./shaders.js'></script>
+    <script type="module">
+
+    import * as THREE from 'https://unpkg.com/three@0.119.0/build/three.module.js';
+    import {OBJLoader} from 'https://unpkg.com/three@0.119.0/examples/jsm/loaders/OBJLoader.js'
+    import {OrbitControls} from 'https://unpkg.com/three@0.119.0/examples/jsm/controls/OrbitControls.js'
+    
+    // Set up the scene
+    var scene = new THREE.Scene();
+
+    // Set up the camera
+    var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    // Set up the renderer
+    var renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Create a cube
+    const geometry = new THREE.SphereGeometry(1, 32, 32);
+
+    const furTexture = new THREE.TextureLoader().load("perturbed_dots.png");
+    furTexture.magFilter =  THREE.LinearFilter;
+    furTexture.wrapS = THREE.RepeatWrapping;
+    furTexture.wrapT = THREE.RepeatWrapping;
+
+    const shellCount = 8;
+    const furMaterialL1 = new THREE.RawShaderMaterial({
+      uniforms: {
+        furTex: {value: furTexture},
+        layer: {value: 1}
+      },
+      vertexShader: FurVertexShader,
+      fragmentShader: FurFragmentShader,
+      transparent: true
+    });
+
+    const furMaterials = Array(shellCount);
+    const shellMeshes = Array(shellCount);
+
+    furMaterials[0] = furMaterialL1;
+    for (let shellId = 1; shellId < shellCount; ++shellId) {
+      furMaterials[shellId] = furMaterialL1.clone();
+      furMaterials[shellId].uniforms.layer.value = shellId + 1;
+      furMaterials[shellId].uniforms.furTex.value = furTexture;
+    }
+
+    for (let shellId = 0; shellId < shellCount; ++shellId) {
+      shellMeshes[shellId] = new THREE.Mesh(geometry, furMaterials[shellId]);
+      scene.add(shellMeshes[shellId]);
+    }
+
+    // Animate the cube
+    var animate = function () {
+        requestAnimationFrame(animate);
+
+        for (let shellId = 1; shellId < shellCount; ++shellId) {
+          shellMeshes[shellId].rotation.x += 0.01;
+          shellMeshes[shellId].rotation.y += 0.01;
+        }
+
+        // Render the scene
+        renderer.render(scene, camera);
+    };
+
+    // Start the animation loop
+    animate();
+
+    </script>
+</body>
+</html>
