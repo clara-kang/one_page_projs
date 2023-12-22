@@ -34,6 +34,11 @@
     const shellCount = 30;
     const texCount = 15
 
+    const patternTexture = new THREE.TextureLoader().load("giraffe.jfif");
+    patternTexture.magFilter = THREE.LinearFilter;
+    patternTexture.wrapS = THREE.RepeatWrapping;
+    patternTexture.wrapT = THREE.RepeatWrapping;
+
     const furTextures = Array(shellCount);
     const furMaterials = Array(shellCount);
     const shellMeshes = Array(shellCount);
@@ -48,13 +53,14 @@
 
     
     const light = new THREE.PointLight( 0xffffff, 1, 100 );
-    light.position.set( 50, 50, 50 );
+    light.position.set( 25, 25, 25 );
     scene.add( light );
 
     for (let shellId = 0; shellId < shellCount; ++shellId) {
       furMaterials[shellId] = new THREE.RawShaderMaterial({
         uniforms: {
           furTex: {value: furTextures[Math.floor(shellId / 2)]},
+          patternTex: {value: patternTexture},
           layer: {value: shellId + 1},
           lightPos: {value: light.position}
         },
@@ -68,11 +74,11 @@
 
     var stdMaterial = new THREE.MeshStandardMaterial({
         color: 0xffffff,  // Replace with your desired color
-        roughness: 0.7,
+        roughness: 1.0,
         metalness: 0.5
     });
 
-    const ambientLight = new THREE.AmbientLight( 0x404040 ); // soft white light
+    const ambientLight = new THREE.AmbientLight( 0xffffff );
     scene.add( ambientLight );
 
     const opaqueMesh = new THREE.Mesh(geometry, stdMaterial);
@@ -83,16 +89,17 @@
       scene.add(shellMeshes[shellId]);
     }
 
+    const controls = new OrbitControls(camera, renderer.domElement);
     // Animate the cube
     var animate = function () {
         requestAnimationFrame(animate);
 
-        // opaqueMesh.rotation.x += 0.005;
-        // opaqueMesh.rotation.y += 0.005;
-        // for (let shellId = 1; shellId < shellCount; ++shellId) {
-        //   shellMeshes[shellId].rotation.x += 0.005;
-        //   shellMeshes[shellId].rotation.y += 0.005;
-        // }
+        opaqueMesh.rotation.x += 0.005;
+        opaqueMesh.rotation.y += 0.005;
+        for (let shellId = 1; shellId < shellCount; ++shellId) {
+          shellMeshes[shellId].rotation.x += 0.005;
+          shellMeshes[shellId].rotation.y += 0.005;
+        }
 
         // Render the scene
         renderer.render(scene, camera);

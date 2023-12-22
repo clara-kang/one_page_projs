@@ -3,7 +3,7 @@ const FurVertexShader =
 precision highp float;
 
 const float radius = 1.0f;
-const float furMaxLength = 0.4f;
+const float furMaxLength = 0.2f;
 const float shellCount = 30.0f;
 const float shellThickness = furMaxLength / shellCount;
 const vec4  gravityDir = vec4(0, -1.0f, 0, 0);
@@ -39,9 +39,11 @@ const FurFragmentShader =
 `#version 300 es
 precision highp float;
 
-const float ambient = 0.1f;
+const float ambient = 0.0f;
 
+const vec3 light_beige_rgb = vec3(245.0, 245.0, 220.0) / 255.0;
 uniform sampler2D furTex;
+uniform sampler2D patternTex;
 uniform vec3 lightPos;
 
 in vec2 vUv;
@@ -52,10 +54,12 @@ out vec4 fragmentColor;
 
 void main() {
   vec3 lightDir = normalize(lightPos - vPos);
-  float diffuse = max(dot(normalize(vNormal), vec3(1.0f)), 0.0);
+  //float diffuse = (dot(normalize(vNormal), vec3(1.0f)) + 1.0f) / 2.0f;
+  float diffuse = max(dot(normalize(vNormal), lightDir), 0.0f);
   float lightFrac = min(diffuse + ambient, 1.0f);
-  vec4 color = texture(furTex, vUv * 6.0f);
-  vec4 clippedColor = step(vec4(0.2f), color);
-  fragmentColor = vec4(clippedColor.xyz * lightFrac, clippedColor.w * (1.0f - layerFrac));
+  vec4 color = texture(furTex, vUv * 8.0f);
+  vec4 clippedColor = step(vec4(0.1f), color);
+  vec4 patternColor = texture(patternTex, vUv * 8.0f);
+  fragmentColor = vec4(clippedColor.xyz * lightFrac * patternColor.xyz, clippedColor.w);
 }
 `
