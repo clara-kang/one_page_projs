@@ -8,7 +8,7 @@
 </head>
 <body>
     <script src='./shaders.js'></script>
-    <script src='./models.js'></script>
+    <script src='./bunny.js'></script>
     <script type="module">
 
     import * as THREE from 'https://unpkg.com/three@0.119.0/build/three.module.js';
@@ -16,20 +16,27 @@
     import {OrbitControls} from 'https://unpkg.com/three@0.119.0/examples/jsm/controls/OrbitControls.js'
     
     // Set up the scene
-    var scene = new THREE.Scene();
+    var scene = new THREE.Scene();  
 
     // Set up the camera
     var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 4;
+    camera.position.set(0, 4, 4);
 
     // Set up the renderer
     var renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    const obj = new OBJLoader().parse(icosphereObjStr);
+    // Set up the controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.minDistance = 2;
+    controls.target.set(0, 2, 0);
+    controls.update();
+    
+    const obj = new OBJLoader().parse(bunnyObjStr);
     const originalMesh = obj.children[0];
     const geometry = originalMesh.geometry;
+    geometry.scale(4, 4, 4);
 
     const shellCount = 30;
     const texCount = 15
@@ -43,6 +50,8 @@
     const furMaterials = Array(shellCount);
     const shellMeshes = Array(shellCount);
 
+    const lightPosition = new THREE.Vector3(1.5, 2, 1.5);
+
     for (let texId = 0; texId < texCount; ++texId) {
       const texName = texId + 1;
       furTextures[texId] = new THREE.TextureLoader().load("dots_" + texName + ".png");
@@ -51,18 +60,13 @@
       furTextures[texId].wrapT = THREE.RepeatWrapping;
     }
 
-    
-    const light = new THREE.PointLight( 0xffffff, 1, 100 );
-    light.position.set( 25, 25, 25 );
-    scene.add( light );
-
     for (let shellId = 0; shellId < shellCount; ++shellId) {
       furMaterials[shellId] = new THREE.RawShaderMaterial({
         uniforms: {
           furTex: {value: furTextures[Math.floor(shellId / 2)]},
           patternTex: {value: patternTexture},
           layer: {value: shellId + 1},
-          lightPos: {value: light.position}
+          lightPos: {value: lightPosition}
         },
         vertexShader: FurVertexShader,
         fragmentShader: FurFragmentShader,
@@ -72,14 +76,13 @@
       });
     }
 
-    var stdMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffffff,  // Replace with your desired color
-        roughness: 1.0,
-        metalness: 0.5
+    var stdMaterial = new THREE.RawShaderMaterial({
+      uniforms: {
+          lightPos: {value: lightPosition}
+        },
+      vertexShader: BasicVertexShader,
+      fragmentShader: BasicFragmentShader,
     });
-
-    const ambientLight = new THREE.AmbientLight( 0xffffff );
-    scene.add( ambientLight );
 
     const opaqueMesh = new THREE.Mesh(geometry, stdMaterial);
     scene.add(opaqueMesh);
@@ -89,17 +92,16 @@
       scene.add(shellMeshes[shellId]);
     }
 
-    const controls = new OrbitControls(camera, renderer.domElement);
     // Animate the cube
     var animate = function () {
         requestAnimationFrame(animate);
 
-        opaqueMesh.rotation.x += 0.005;
-        opaqueMesh.rotation.y += 0.005;
-        for (let shellId = 1; shellId < shellCount; ++shellId) {
-          shellMeshes[shellId].rotation.x += 0.005;
-          shellMeshes[shellId].rotation.y += 0.005;
-        }
+        // opaqueMesh.rotation.x += 0.005;
+        // opaqueMesh.rotation.y += 0.005;
+        // for (let shellId = 0; shellId < shellCount; ++shellId) {
+        //   shellMeshes[shellId].rotation.x += 0.005;
+        //   shellMeshes[shellId].rotation.y += 0.005;
+        // }
 
         // Render the scene
         renderer.render(scene, camera);
