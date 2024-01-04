@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Particle Collision</title>
+    <!-- Add any additional meta tags, stylesheets, or other head content here -->
+</head>
+<body>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5/dat.gui.min.js"></script>
+    <script type="module">
+
+    import * as THREE from 'https://unpkg.com/three@0.119.0/build/three.module.js';
+    import {OrbitControls} from 'https://unpkg.com/three@0.119.0/examples/jsm/controls/OrbitControls.js'
+    
+    // Set up the scene
+    var scene = new THREE.Scene();  
+
+    // Add a light to the scene
+    const light = new THREE.PointLight(0xFFFFFF, 1, 100);
+    light.position.set(0, 0, 5);
+    scene.add(light);
+
+    // Add ambient light to the scene
+    scene.add(new THREE.AmbientLight(0x404040));
+
+    // Set up the camera
+    var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 4, 4);
+
+    // Set up the renderer
+    var renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Set up the controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+
+    // Set up particles
+    class Particle {
+      constructor(position, velocity, radius) {
+        this.position = position;
+        this.velocity = velocity;
+        this.radius = radius;
+      }
+    }
+
+    function generateParticles(N, positionRange, speedRange, radiusRange) {
+      const particles = [];
+
+      for (let i = 0; i < N; i++) {
+        const x = getRandomInRange(positionRange.minX, positionRange.maxX);
+        const y = getRandomInRange(positionRange.minY, positionRange.maxY);
+        const z = getRandomInRange(positionRange.minZ, positionRange.maxZ);
+
+        // Create a random normalized direction vector
+        const direction = new THREE.Vector3(
+          getRandomInRange(-1, 1),
+          getRandomInRange(-1, 1),
+          getRandomInRange(-1, 1)
+        ).normalize();
+
+        // Calculate speed within the given range
+        const speed = getRandomInRange(speedRange.min, speedRange.max);
+
+        // Scale the direction vector by the speed to get the velocity vector
+        const velocity = direction.clone().multiplyScalar(speed);
+
+        const radius = getRandomInRange(radiusRange.min, radiusRange.max);
+
+        particles.push(new Particle(new THREE.Vector3(x, y, z), velocity, radius));
+      }
+
+      return particles;
+    }
+
+    function getRandomInRange(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    const positionRange = { minX: -2, maxX: 2, minY: -2, maxY: 2, minZ: -2, maxZ: 2 };
+    const speedRange = { min: 1, max: 2 };
+    const radiusRange = { min: 5, max: 15 };
+
+    // set up GUI
+    const gui = new dat.GUI();
+
+    // Add a variable to the GUI
+    const guiControls = {
+      e: 0.5, // Set an initial value
+    };
+
+    gui.add(guiControls, 'e').min(0).max(1).step(0.01).name('Restitution Coefficient');
+
+    const particles = generateParticles(100, positionRange, speedRange, radiusRange);
+    console.log(particles);
+
+    const geometry = new THREE.SphereGeometry(0.1, 32, 32);
+
+    // Create spheres for each particle
+    const spheres = particles.map((particle) => {
+      const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+      const sphere = new THREE.Mesh(geometry, material);
+      
+      sphere.position.copy(particle.position);
+      //sphere.scale.copy(particle.radius, particle.radius, particle.radius);
+      scene.add(sphere);
+
+      return sphere;
+    });
+
+    function particle_wall_collision_update(particle) {
+      const wallNormal = new THREE.Vector3(0, 0, 0);
+      if (particle.position.x <= positionRange.minX) {
+        wallNormal.set(1, 0, 0);
+        particle.position.x = positionRange.minX;
+      }
+      if (particle.position.x >= positionRange.maxX) {
+        wallNormal.set(-1, 0, 0);
+        particle.position.x = positionRange.maxX;
+      }
+      if (particle.position.y <= positionRange.minY) {
+        wallNormal.set(0, 1, 0);
+        particle.position.y = positionRange.minY;
+      }
+      if (particle.position.y >= positionRange.maxY) {
+        wallNormal.set(0, -1, 0);
+        particle.position.y = positionRange.maxY;
+      }
+      if (particle.position.z <= positionRange.minZ) {
+        wallNormal.set(0, 0, 1);
+        particle.position.z = positionRange.minZ;
+      }
+      if (particle.position.z >= positionRange.maxZ) {
+        wallNormal.set(0, 0, -1);
+        particle.position.z = positionRange.maxZ;
+      }
+      if (wallNormal.length() == 1) {
+        const e = guiControls.e;
+        particle.velocity.addScaledVector(wallNormal, -particle.velocity.dot(wallNormal) * (1 + e));
+      }
+    }
+
+    function particle_particle_collision_update(particleA, particleB) {
+      const e = guiControls.e;
+      if (particleA.position.distanceTo(particleB.position) <= particleA.radius + particleB.radius) {
+        const normal = new THREE.Vector3().addVectors(particleA.position, -particleB.position).normalize();
+        const massMultiplierA = Math.pow(particleB.radius, 3) / ( Math.pow(particleB.radius, 3) + Math.pow(particleA.radius, 3) );
+        const massMultiplierB = Math.pow(particleA.radius, 3) / ( Math.pow(particleB.radius, 3) + Math.pow(particleA.radius, 3) );
+        const velocityDiff = new THREE.Vector3().addVectors(particleB.velocity, -particleA.velocity);
+        particleA.velocity.addScaledVector(normal, massMultiplierA * (1 + e) * velocityDiff.dot(normal));
+        particleB.velocity.addScaledVector(normal, -massMultiplierB * (1 + e) * velocityDiff.dot(normal));
+      }
+    }
+
+    function particle_position_update(particle, elapsedSeconds) {
+      particle.position.addScaledVector(particle.velocity, elapsedSeconds);
+    }
+
+    function particles_update(elapsedSeconds) {
+      for (let i = 0; i < particles.length; ++i) {
+        particle_wall_collision_update(particles[i]);
+        for (let j = i + 1; j < particles.length; ++j) {
+          particle_particle_collision_update(particles[i], particles[j]);
+        }
+        particle_position_update(particles[i], elapsedSeconds);
+      }
+    }
+
+    let lastTimestamp = performance.now();
+    // Animate the particles
+    function animate() {
+      const timestamp = performance.now();
+      const elapsedMilliseconds = timestamp - lastTimestamp;
+      const elapsedSeconds = elapsedMilliseconds / 1000;
+
+      particles.forEach((particle, index) => {
+        particle_wall_collision_update(particle);
+        particle_position_update(particle, elapsedSeconds);
+        spheres[index].position.copy(particle.position);
+      });
+      // Render the scene
+      renderer.render(scene, camera);
+
+      lastTimestamp = timestamp;
+
+      // Request the next animation frame
+      requestAnimationFrame(animate);
+    };
+
+    // Start the animation loop
+    animate();
+
+    </script>
+</body>
+</html>
