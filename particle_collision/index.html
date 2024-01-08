@@ -26,7 +26,7 @@
 
     // Set up the camera
     var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 4, 4);
+    camera.position.set(0, 0, 4);
 
     // Set up the renderer
     var renderer = new THREE.WebGLRenderer();
@@ -52,12 +52,14 @@
         const x = getRandomInRange(positionRange.minX, positionRange.maxX);
         const y = getRandomInRange(positionRange.minY, positionRange.maxY);
         const z = getRandomInRange(positionRange.minZ, positionRange.maxZ);
+        // const z = 0;
 
         // Create a random normalized direction vector
         const direction = new THREE.Vector3(
           getRandomInRange(-1, 1),
           getRandomInRange(-1, 1),
           getRandomInRange(-1, 1)
+          // 0
         ).normalize();
 
         // Calculate speed within the given range
@@ -80,74 +82,107 @@
 
     const positionRange = { minX: -2, maxX: 2, minY: -2, maxY: 2, minZ: -2, maxZ: 2 };
     const speedRange = { min: 1, max: 2 };
-    const radiusRange = { min: 5, max: 15 };
+    const radiusRange = { min: 0.1, max: 0.2 };
+    const particleCount = 50;
 
     // set up GUI
     const gui = new dat.GUI();
 
     // Add a variable to the GUI
     const guiControls = {
-      e: 0.5, // Set an initial value
+      e: 0.95, // Set an initial value
     };
 
     gui.add(guiControls, 'e').min(0).max(1).step(0.01).name('Restitution Coefficient');
 
-    const particles = generateParticles(100, positionRange, speedRange, radiusRange);
-    console.log(particles);
+    const particles = generateParticles(particleCount, positionRange, speedRange, radiusRange);
 
-    const geometry = new THREE.SphereGeometry(0.1, 32, 32);
+    const geometry = new THREE.SphereGeometry(1, 32, 32);
+
+    const colorPalette = [
+      new THREE.Color(0xFF6F61),
+      new THREE.Color(0xFFD166),
+      new THREE.Color(0xFFAC8C),
+      new THREE.Color(0xFFD700),
+      new THREE.Color(0x8D5524),
+      new THREE.Color(0x654321)
+    ];
 
     // Create spheres for each particle
     const spheres = particles.map((particle) => {
-      const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+      const material = new THREE.MeshStandardMaterial({ color: colorPalette[Math.floor(getRandomInRange(0, 6))] });
       const sphere = new THREE.Mesh(geometry, material);
       
+      sphere.scale.set(particle.radius, particle.radius, particle.radius);
       sphere.position.copy(particle.position);
-      //sphere.scale.copy(particle.radius, particle.radius, particle.radius);
       scene.add(sphere);
 
       return sphere;
     });
 
+    function particle_wall_collision_set_velocity(particle, wallNormal) {
+      const e = guiControls.e;
+      particle.velocity.addScaledVector(wallNormal, -particle.velocity.dot(wallNormal) * (1 + e));
+    }
+
     function particle_wall_collision_update(particle) {
       const wallNormal = new THREE.Vector3(0, 0, 0);
-      if (particle.position.x <= positionRange.minX) {
+      if (particle.position.x < positionRange.minX) {
         wallNormal.set(1, 0, 0);
+        particle_wall_collision_set_velocity(particle, wallNormal);
         particle.position.x = positionRange.minX;
       }
-      if (particle.position.x >= positionRange.maxX) {
+      else if (particle.position.x > positionRange.maxX) {
         wallNormal.set(-1, 0, 0);
+        particle_wall_collision_set_velocity(particle, wallNormal);
         particle.position.x = positionRange.maxX;
       }
-      if (particle.position.y <= positionRange.minY) {
+      else if (particle.position.y < positionRange.minY) {
         wallNormal.set(0, 1, 0);
+        particle_wall_collision_set_velocity(particle, wallNormal);
         particle.position.y = positionRange.minY;
       }
-      if (particle.position.y >= positionRange.maxY) {
+      else if (particle.position.y > positionRange.maxY) {
         wallNormal.set(0, -1, 0);
+        particle_wall_collision_set_velocity(particle, wallNormal);
         particle.position.y = positionRange.maxY;
       }
-      if (particle.position.z <= positionRange.minZ) {
-        wallNormal.set(0, 0, 1);
-        particle.position.z = positionRange.minZ;
-      }
-      if (particle.position.z >= positionRange.maxZ) {
-        wallNormal.set(0, 0, -1);
-        particle.position.z = positionRange.maxZ;
-      }
-      if (wallNormal.length() == 1) {
-        const e = guiControls.e;
-        particle.velocity.addScaledVector(wallNormal, -particle.velocity.dot(wallNormal) * (1 + e));
+      // else if (particle.position.z <= positionRange.minZ) {
+      //   wallNormal.set(0, 0, 1);
+      //   particle_wall_collision_set_velocity(particle, wallNormal);
+      //   particle.position.z = positionRange.minZ;
+      // }
+      // else if (particle.position.z >= positionRange.maxZ) {
+      //   wallNormal.set(0, 0, -1);
+      //   particle_wall_collision_set_velocity(particle, wallNormal);
+      //   particle.position.z = positionRange.maxZ;
+      // }
+    }
+
+    function particle_sphere_wall_collision_update(particle) {
+      const wallNormal = new THREE.Vector3(0, 0, 0);
+      if (particle.position.length() > positionRange.maxX) {
+        wallNormal.copy(particle.position).negate().normalize();
+        particle_wall_collision_set_velocity(particle, wallNormal);
+        const prevPos = particle.position.clone();
+        particle.position.copy(wallNormal).multiplyScalar(-positionRange.maxX);
       }
     }
 
     function particle_particle_collision_update(particleA, particleB) {
       const e = guiControls.e;
-      if (particleA.position.distanceTo(particleB.position) <= particleA.radius + particleB.radius) {
-        const normal = new THREE.Vector3().addVectors(particleA.position, -particleB.position).normalize();
+      const dist = particleA.position.distanceTo(particleB.position);
+      if (dist <= particleA.radius + particleB.radius) {
+        const lineDir = new THREE.Vector3().subVectors(particleA.position, particleB.position).normalize();
+        const distToSeparate = particleA.radius + particleB.radius - dist;
+        particleA.position.addScaledVector(lineDir, distToSeparate / 2);
+        particleB.position.addScaledVector(lineDir, -distToSeparate / 2);
+
+        const normal = new THREE.Vector3().subVectors(particleA.position, particleB.position).normalize();
         const massMultiplierA = Math.pow(particleB.radius, 3) / ( Math.pow(particleB.radius, 3) + Math.pow(particleA.radius, 3) );
         const massMultiplierB = Math.pow(particleA.radius, 3) / ( Math.pow(particleB.radius, 3) + Math.pow(particleA.radius, 3) );
-        const velocityDiff = new THREE.Vector3().addVectors(particleB.velocity, -particleA.velocity);
+        const velocityDiff = new THREE.Vector3().subVectors(particleB.velocity, particleA.velocity);
+
         particleA.velocity.addScaledVector(normal, massMultiplierA * (1 + e) * velocityDiff.dot(normal));
         particleB.velocity.addScaledVector(normal, -massMultiplierB * (1 + e) * velocityDiff.dot(normal));
       }
@@ -159,7 +194,8 @@
 
     function particles_update(elapsedSeconds) {
       for (let i = 0; i < particles.length; ++i) {
-        particle_wall_collision_update(particles[i]);
+        // particle_wall_collision_update(particles[i]);
+        particle_sphere_wall_collision_update(particles[i]);
         for (let j = i + 1; j < particles.length; ++j) {
           particle_particle_collision_update(particles[i], particles[j]);
         }
@@ -168,23 +204,24 @@
     }
 
     let lastTimestamp = performance.now();
-    // Animate the particles
-    function animate() {
+    function run_particles_update() {
       const timestamp = performance.now();
       const elapsedMilliseconds = timestamp - lastTimestamp;
       const elapsedSeconds = elapsedMilliseconds / 1000;
 
+      particles_update(elapsedSeconds);
+      lastTimestamp = timestamp;
+    }
+
+    // Set up the interval
+    setInterval(run_particles_update, 20);
+
+    // Animate the particles
+    function animate() {
       particles.forEach((particle, index) => {
-        particle_wall_collision_update(particle);
-        particle_position_update(particle, elapsedSeconds);
         spheres[index].position.copy(particle.position);
       });
-      // Render the scene
       renderer.render(scene, camera);
-
-      lastTimestamp = timestamp;
-
-      // Request the next animation frame
       requestAnimationFrame(animate);
     };
 
