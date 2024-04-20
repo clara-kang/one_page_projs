@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2 Rectangles</title>
+<style>
+    canvas {
+        border: 1px solid black;
+    }
+</style>
+</head>
+<body>
+<canvas id="canvas" width="800" height="600"></canvas>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.163.0/build/three.module.js';
+
+class Rect {
+  constructor(pos, orientatn, vel, w, width, height, Izz) {
+    this.pos = pos;
+    this.orientatn = orientatn;
+    this.vel = vel;
+    this.w = w;
+    this.height = height;
+    this.width = width;
+    this.Izz = Izz;
+    this.vertices = [
+      new THREE.Vector3(-width/2, -height/2, 1),
+      new THREE.Vector3(width/2, -height/2, 1),
+      new THREE.Vector3(width/2, height/2, 1),
+      new THREE.Vector3(-width/2, height/2, 1)
+    ];
+    this.prevVertices = [
+      new THREE.Vector3(-width/2, -height/2, 1),
+      new THREE.Vector3(width/2, -height/2, 1),
+      new THREE.Vector3(width/2, height/2, 1),
+      new THREE.Vector3(-width/2, height/2, 1)
+    ];
+    this.verticesLoc = [
+      new THREE.Vector3(-width/2, -height/2, 1),
+      new THREE.Vector3(width/2, -height/2, 1),
+      new THREE.Vector3(width/2, height/2, 1),
+      new THREE.Vector3(-width/2, height/2, 1)
+    ];
+    this.transformMat = new THREE.Matrix3();
+  }
+
+  updateVertices(){
+    this.transformMat.makeRotation(this.orientatn).translate(this.pos.x, this.pos.y);
+    for (let i = 0; i < 4; ++i) {
+      this.prevVertices[i].copy(this.vertices[i])
+    }
+    for (let i = 0; i < 4; ++i) {
+      this.vertices[i].copy(this.verticesLoc[i]).applyMatrix3(this.transformMat);
+    }
+  }
+}
+
+function getRandomInRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function generateRects(N, positionRange, speedRange, lengthRange) {
+  const rects = [];
+
+  for (let i = 0; i < N; i++) {
+    const x = getRandomInRange(positionRange.minX, positionRange.maxX);
+    const y = getRandomInRange(positionRange.minY, positionRange.maxY);
+
+    // Create a random normalized direction vector
+    const direction = new THREE.Vector2(
+      getRandomInRange(-1, 1),
+      getRandomInRange(-1, 1)
+    ).normalize();
+
+    // Calculate speed within the given range
+    const speed = getRandomInRange(speedRange.min, speedRange.max);
+
+    // Scale the direction vector by the speed to get the velocity vector
+    const velocity = direction.clone().multiplyScalar(speed);
+    const orientatn = getRandomInRange(0, Math.PI * 2);
+    const angularVel = 1;
+    const height = getRandomInRange(lengthRange.min, lengthRange.max);
+    const width = getRandomInRange(lengthRange.min, lengthRange.max);
+    const Izz = length * width * (length * length + width * width) / 12;
+
+    rects.push(new Rect(new THREE.Vector2(x, y), orientatn, velocity, angularVel, width, height, Izz));
+  }
+
+  return rects;
+}
+
+function rects_update(elapsedSeconds) {
+  for (let i = 0; i < rects.length; ++i) {
+    rects[i].pos.addScaledVector(rects[i].vel, elapsedSeconds);
+    rects[i].orientatn += rects[i].w * elapsedSeconds;
+    rects[i].orientatn %= 2 * Math.PI;
+    rects[i].updateVertices();
+  }
+}
+
+function run_rects_update() {
+  const timestamp = performance.now();
+  const elapsedMilliseconds = timestamp - lastTimestamp;
+  const elapsedSeconds = elapsedMilliseconds / 1000;
+
+  rects_update(elapsedSeconds);
+  draw_rects();
+  lastTimestamp = timestamp;
+}
+
+function draw_rects() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let i = 0; i < rects.length; ++i) {
+    // ctx.save();
+    // ctx.translate(rects[i].pos.x, rects[i].pos.y)
+    // ctx.rotate(rects[i].orientatn);
+    ctx.fillStyle = palette[i % palette.length];
+    // ctx.fillRect(0, 0, rects[i].width, rects[i].height);
+    // ctx.restore();
+
+    // Begin a new path
+    ctx.beginPath();
+
+    // Move to the first vertex
+    ctx.moveTo(rects[i].vertices[0].x, rects[i].vertices[0].y);
+
+    // Draw lines to the other vertices
+    for (let j = 1; j < 4; j++) {
+        ctx.lineTo(rects[i].vertices[j].x, rects[i].vertices[j].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+var canvas = document.getElementById("canvas");
+var ctx = canvas.getContext("2d");
+
+const positionRange = { minX: 200, maxX: 500, minY: 0, maxY: 700};
+const speedRange = { min: 5, max: 10 };
+const lengthRange = { min: 20, max: 40 };
+const rects = generateRects(10, positionRange, speedRange, lengthRange);
+const palette = ["red", "green", "blue", "orange", "purple"];
+
+let lastTimestamp = performance.now();
+
+setInterval(run_rects_update, 50);
+
+</script>
+</body>
+</html>
