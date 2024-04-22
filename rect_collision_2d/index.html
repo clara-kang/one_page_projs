@@ -16,15 +16,22 @@
 <script type="module">
 import * as THREE from 'https://unpkg.com/three@0.163.0/build/three.module.js';
 
+const k_wallWidthMin = 10;
+const k_wallHeightMin = 10; 
+const k_wallWidthMax = 800;
+const k_wallHeightMax = 600;
+const k_restitution = 1; 
+
 class Rect {
-  constructor(pos, orientatn, vel, w, width, height, Izz) {
-    this.pos = pos;
-    this.orientatn = orientatn;
-    this.vel = vel;
-    this.w = w;
+  constructor(pos, orientatn, v, w, width, height) {
+    this.pos = pos; // THREE.Vector3, position of center of mass, last component is 0
+    this.orientatn = orientatn; // angle in radians
+    this.v = v; // THREE.Vector3, velocity of center of mass, last component is 0
+    this.w = w; // angular speed in radians
     this.height = height;
     this.width = width;
-    this.Izz = Izz;
+
+    this.M = width * height;
     this.vertices = [
       new THREE.Vector3(-width/2, -height/2, 1),
       new THREE.Vector3(width/2, -height/2, 1),
@@ -37,13 +44,15 @@ class Rect {
       new THREE.Vector3(width/2, height/2, 1),
       new THREE.Vector3(-width/2, height/2, 1)
     ];
-    this.verticesLoc = [
+    this.verticesInit = [
       new THREE.Vector3(-width/2, -height/2, 1),
       new THREE.Vector3(width/2, -height/2, 1),
       new THREE.Vector3(width/2, height/2, 1),
       new THREE.Vector3(-width/2, height/2, 1)
     ];
     this.transformMat = new THREE.Matrix3();
+    this.Izz = width * height * (width * width + height * height) / 12;
+    this.AABB = new THREE.Box3();
   }
 
   updateVertices(){
@@ -52,8 +61,9 @@ class Rect {
       this.prevVertices[i].copy(this.vertices[i])
     }
     for (let i = 0; i < 4; ++i) {
-      this.vertices[i].copy(this.verticesLoc[i]).applyMatrix3(this.transformMat);
+      this.vertices[i].copy(this.verticesInit[i]).applyMatrix3(this.transformMat);
     }
+    this.AABB.setFromPoints(this.vertices);
   }
 }
 
@@ -69,9 +79,10 @@ function generateRects(N, positionRange, speedRange, lengthRange) {
     const y = getRandomInRange(positionRange.minY, positionRange.maxY);
 
     // Create a random normalized direction vector
-    const direction = new THREE.Vector2(
+    const direction = new THREE.Vector3(
       getRandomInRange(-1, 1),
-      getRandomInRange(-1, 1)
+      getRandomInRange(-1, 1),
+      0
     ).normalize();
 
     // Calculate speed within the given range
@@ -80,12 +91,11 @@ function generateRects(N, positionRange, speedRange, lengthRange) {
     // Scale the direction vector by the speed to get the velocity vector
     const velocity = direction.clone().multiplyScalar(speed);
     const orientatn = getRandomInRange(0, Math.PI * 2);
-    const angularVel = 1;
+    const angularVel = 0.2 / 2 / Math.PI;
     const height = getRandomInRange(lengthRange.min, lengthRange.max);
     const width = getRandomInRange(lengthRange.min, lengthRange.max);
-    const Izz = length * width * (length * length + width * width) / 12;
 
-    rects.push(new Rect(new THREE.Vector2(x, y), orientatn, velocity, angularVel, width, height, Izz));
+    rects.push(new Rect(new THREE.Vector3(x, y, 0), orientatn, velocity, angularVel, width, height));
   }
 
   return rects;
@@ -93,10 +103,52 @@ function generateRects(N, positionRange, speedRange, lengthRange) {
 
 function rects_update(elapsedSeconds) {
   for (let i = 0; i < rects.length; ++i) {
-    rects[i].pos.addScaledVector(rects[i].vel, elapsedSeconds);
+    rects[i].pos.addScaledVector(rects[i].v, elapsedSeconds);
     rects[i].orientatn += rects[i].w * elapsedSeconds;
     rects[i].orientatn %= 2 * Math.PI;
     rects[i].updateVertices();
+  }
+}
+
+function rects_wall_collision() {
+  for (let i = 0; i < rects.length; ++i) {
+    let q; // collided vertex location
+    let n;
+    if (rects[i].AABB.min.x < k_wallWidthMin) {
+      q = rects[i].vertices.reduce((minVertex, vertex) =>
+        vertex.x < minVertex.x ? vertex : minVertex
+      , rects[i].vertices[0]);
+      n = new THREE.Vector3(1, 0, 0);
+    } else if (rects[i].AABB.min.y < k_wallHeightMin) {
+      q = rects[i].vertices.reduce((minVertex, vertex) =>
+        vertex.y < minVertex.y ? vertex : minVertex
+      , rects[i].vertices[0]);
+      n = new THREE.Vector3(0, 1, 0);
+    } else if (rects[i].AABB.max.x > k_wallWidthMax) {
+      q = rects[i].vertices.reduce((maxVertex, vertex) =>
+        vertex.x > maxVertex.x ? vertex : maxVertex
+      , rects[i].vertices[0]);
+      n = new THREE.Vector3(-1, 0, 0);
+    } else if (rects[i].AABB.max.y > k_wallHeightMax) {
+      q = rects[i].vertices.reduce((maxVertex, vertex) =>
+        vertex.y > maxVertex.y ? vertex : maxVertex
+      , rects[i].vertices[0]);
+      n = new THREE.Vector3(0, -1, 0);
+    } else {
+      continue;
+    }
+    const rq = new THREE.Vector3().subVectors(q, rects[i].pos);
+    const A11 = 1 + rects[i].M * rq.y * rq.y / rects[i].Izz;
+    const A12 = - rects[i].M * rq.x * rq.y / rects[i].Izz;
+    const A22 = 1 + rects[i].M * rq.x * rq.x / rects[i].Izz;
+    const vq = new THREE.Vector3(0, 0, rects[i].w).cross(rq).add(rects[i].v);
+    const rhs = n.multiplyScalar(- (1 + k_restitution) * vq.dot(n)); // n is no longer normal
+    const A = new THREE.Matrix3().set(A11, A12, 0, A12, A22, 0, 0, 0, 1);
+    const deltaV = rhs.applyMatrix3(A.invert());
+    const deltaW = rects[i].M * (rq.x * deltaV.y - rq.y * deltaV.x) / rects[i].Izz;
+
+    rects[i].v.add(deltaV);
+    rects[i].w += deltaW;
   }
 }
 
@@ -106,6 +158,7 @@ function run_rects_update() {
   const elapsedSeconds = elapsedMilliseconds / 1000;
 
   rects_update(elapsedSeconds);
+  rects_wall_collision();
   draw_rects();
   lastTimestamp = timestamp;
 }
@@ -125,21 +178,31 @@ function draw_rects() {
     ctx.beginPath();
 
     // Move to the first vertex
-    ctx.moveTo(rects[i].vertices[0].x, rects[i].vertices[0].y);
+    ctx.moveTo(rects[i].vertices[0].x, k_wallHeightMax - rects[i].vertices[0].y);
 
     // Draw lines to the other vertices
     for (let j = 1; j < 4; j++) {
-        ctx.lineTo(rects[i].vertices[j].x, rects[i].vertices[j].y);
+        ctx.lineTo(rects[i].vertices[j].x, k_wallHeightMax - rects[i].vertices[j].y);
     }
     ctx.closePath();
     ctx.fill();
+
+    // // draw AABB
+    // ctx.beginPath();
+    // ctx.moveTo(rects[i].AABB.min.x, rects[i].AABB.min.y);
+    // ctx.lineTo(rects[i].AABB.max.x, rects[i].AABB.min.y);
+    // ctx.lineTo(rects[i].AABB.max.x, rects[i].AABB.max.y);
+    // ctx.lineTo(rects[i].AABB.min.x, rects[i].AABB.max.y);
+    // ctx.closePath();
+    // ctx.stroke();
+
   }
 }
 
 var canvas = document.getElementById("canvas");
 var ctx = canvas.getContext("2d");
 
-const positionRange = { minX: 200, maxX: 500, minY: 0, maxY: 700};
+const positionRange = { minX: k_wallWidthMin + 100, maxX: k_wallHeightMax - 100, minY: k_wallHeightMin + 100, maxY: k_wallHeightMax - 100};
 const speedRange = { min: 5, max: 10 };
 const lengthRange = { min: 20, max: 40 };
 const rects = generateRects(10, positionRange, speedRange, lengthRange);
