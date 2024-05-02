@@ -23,13 +23,14 @@ const k_wallHeightMax = 600;
 const k_restitution = 1; 
 
 class Rect {
-  constructor(pos, orientatn, v, w, width, height) {
+  constructor(pos, orientatn, v, w, width, height, color) {
     this.pos = pos; // THREE.Vector3, position of center of mass, last component is 0
     this.orientatn = orientatn; // angle in radians
     this.v = v; // THREE.Vector3, velocity of center of mass, last component is 0
     this.w = w; // angular speed in radians
     this.height = height;
     this.width = width;
+    this.color = color; // for debug
 
     this.M = width * height;
     this.vertices = [
@@ -38,18 +39,24 @@ class Rect {
       new THREE.Vector3(width/2, height/2, 1),
       new THREE.Vector3(-width/2, height/2, 1)
     ];
-    this.prevVertices = [
-      new THREE.Vector3(-width/2, -height/2, 1),
-      new THREE.Vector3(width/2, -height/2, 1),
-      new THREE.Vector3(width/2, height/2, 1),
-      new THREE.Vector3(-width/2, height/2, 1)
-    ];
+    // this.prevVertices = [
+    //   new THREE.Vector3(-width/2, -height/2, 1),
+    //   new THREE.Vector3(width/2, -height/2, 1),
+    //   new THREE.Vector3(width/2, height/2, 1),
+    //   new THREE.Vector3(-width/2, height/2, 1)
+    // ];
     this.verticesInit = [
       new THREE.Vector3(-width/2, -height/2, 1),
       new THREE.Vector3(width/2, -height/2, 1),
       new THREE.Vector3(width/2, height/2, 1),
       new THREE.Vector3(-width/2, height/2, 1)
     ];
+    this.edgeNormalsInit = [
+      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(-1, 0, 0),
+      new THREE.Vector3(0, -1, 0),
+      new THREE.Vector3(1, 0, 0)
+    ]
     this.transformMat = new THREE.Matrix3();
     this.Izz = width * height * (width * width + height * height) / 12;
     this.AABB = new THREE.Box3();
@@ -57,13 +64,24 @@ class Rect {
 
   updateVertices(){
     this.transformMat.makeRotation(this.orientatn).translate(this.pos.x, this.pos.y);
-    for (let i = 0; i < 4; ++i) {
-      this.prevVertices[i].copy(this.vertices[i])
-    }
+    // for (let i = 0; i < 4; ++i) {
+    //   this.prevVertices[i].copy(this.vertices[i])
+    // }
     for (let i = 0; i < 4; ++i) {
       this.vertices[i].copy(this.verticesInit[i]).applyMatrix3(this.transformMat);
     }
     this.AABB.setFromPoints(this.vertices);
+  }
+}
+
+class Collision {
+  // first rect has 1 vertex inside second rect
+  constructor(firstRect, secondRect, vertex, edgeNormal, distToEdge) {
+    this.firstRect = firstRect;
+    this.secondRect = secondRect;
+    this.vertex = vertex;
+    this.edgeNormal = edgeNormal;
+    this.distToEdge = distToEdge;
   }
 }
 
@@ -73,10 +91,14 @@ function getRandomInRange(min, max) {
 
 function generateRects(N, positionRange, speedRange, lengthRange) {
   const rects = [];
-
+  const rectNumOnAxis = Math.sqrt(N);
   for (let i = 0; i < N; i++) {
-    const x = getRandomInRange(positionRange.minX, positionRange.maxX);
-    const y = getRandomInRange(positionRange.minY, positionRange.maxY);
+    const gridX = i / rectNumOnAxis;
+    const gridY = i % rectNumOnAxis;
+    // const x = getRandomInRange(positionRange.minX, positionRange.maxX);
+    // const y = getRandomInRange(positionRange.minY, positionRange.maxY);
+    const x = gridX * (positionRange.maxX - positionRange.minX) / rectNumOnAxis + positionRange.minX;
+    const y = gridY * (positionRange.maxY - positionRange.minY) / rectNumOnAxis + positionRange.minY;
 
     // Create a random normalized direction vector
     const direction = new THREE.Vector3(
@@ -95,7 +117,7 @@ function generateRects(N, positionRange, speedRange, lengthRange) {
     const height = getRandomInRange(lengthRange.min, lengthRange.max);
     const width = getRandomInRange(lengthRange.min, lengthRange.max);
 
-    rects.push(new Rect(new THREE.Vector3(x, y, 0), orientatn, velocity, angularVel, width, height));
+    rects.push(new Rect(new THREE.Vector3(x, y, 0), orientatn, velocity, angularVel, width, height, palette[i % palette.length]));
   }
 
   return rects;
@@ -142,13 +164,123 @@ function rects_wall_collision() {
     const A12 = - rects[i].M * rq.x * rq.y / rects[i].Izz;
     const A22 = 1 + rects[i].M * rq.x * rq.x / rects[i].Izz;
     const vq = new THREE.Vector3(0, 0, rects[i].w).cross(rq).add(rects[i].v);
-    const rhs = n.multiplyScalar(- (1 + k_restitution) * vq.dot(n)); // n is no longer normal
+
+    if (vq.dot(n) > 0) {
+      // already leaving?
+      return;
+    }
+    const rhs = n.multiplyScalar(- (1 + k_restitution) * vq.dot(n)); // n is modified
     const A = new THREE.Matrix3().set(A11, A12, 0, A12, A22, 0, 0, 0, 1);
     const deltaV = rhs.applyMatrix3(A.invert());
     const deltaW = rects[i].M * (rq.x * deltaV.y - rq.y * deltaV.x) / rects[i].Izz;
 
     rects[i].v.add(deltaV);
     rects[i].w += deltaW;
+  }
+}
+
+function find_rects_AABB_intersect_pairs() {
+  const pairs = [];
+  for (let i = 0; i < rects.length; ++i) {
+    for (let j = i + 1; j < rects.length; ++j) {
+      if (rects[i].AABB.intersectsBox(rects[j].AABB)) {
+        pairs.push([i, j]);
+      }
+    }
+  }
+  return pairs;
+}
+
+function findCollision(firstRect, secondRect) {
+  // iterate over vertices
+  for (let i = 0; i < 4; ++i) {
+    let distToEdge = Infinity;
+    let edgeNormal;
+    let vertex;
+    let stillInsideSecondRect = true;
+    const curVertex = firstRect.vertices[i];
+
+    // iterate over edges
+    for (let j = 0; j < 4; ++j) {
+      const edge = new THREE.Vector3().subVectors(secondRect.vertices[(j + 1) % 4], secondRect.vertices[j]);
+      const v = new THREE.Vector3().subVectors(curVertex, secondRect.vertices[j]);
+      if (edge.dot(v) > 0) {
+        const curEdgeNormal = secondRect.edgeNormalsInit[j].clone().applyMatrix3(secondRect.transformMat);
+        const curDistToEdge = v.dot(curEdgeNormal);
+        if (curDistToEdge < distToEdge) {
+          distToEdge = curDistToEdge;
+          edgeNormal = curEdgeNormal;
+          vertex = curVertex;
+        }
+      } else {
+        stillInsideSecondRect = false;
+        break;
+      }
+    }
+    if (stillInsideSecondRect) {
+      // create Collision info
+      return new Collision(firstRect, secondRect, vertex, edgeNormal.negate(), distToEdge);
+    }
+  }
+  return null;
+}
+
+function find_rects_rects_collision_pairs(AABBIntrsctnPairs) {
+  let collisionPairs = [];
+  for (const [a, b] of AABBIntrsctnPairs) {
+    let collisionInfo = findCollision(rects[a], rects[b]);
+    if (collisionInfo != null) {
+      collisionPairs.push(collisionInfo)
+    } else {
+      collisionInfo = findCollision(rects[b], rects[a]);
+      if (collisionInfo != null) {
+        collisionPairs.push(collisionInfo)
+      }
+    }
+  }
+  return collisionPairs;
+}
+
+function process_collision_pairs(collisionPairs) {
+  for (let collisionPair of collisionPairs) {
+    // move firstRect along opposite of edge normal
+    const displace = collisionPair.edgeNormal.clone().multiplyScalar(collisionPair.distToEdge);
+    for (let vertex of collisionPair.firstRect.vertices) {
+      vertex.add(displace);
+    }
+    collisionPair.vertex.add(displace);
+
+    const rqFirst = new THREE.Vector3().subVectors(collisionPair.vertex, collisionPair.firstRect.pos);
+    const rqSecnd = new THREE.Vector3().subVectors(collisionPair.vertex, collisionPair.secondRect.pos);
+    const A11 = 1 + collisionPair.firstRect.M * rqFirst.y * rqFirst.y / collisionPair.firstRect.Izz;
+    const A12 = - collisionPair.firstRect.M * rqFirst.x * rqFirst.y / collisionPair.firstRect.Izz;
+    const A22 = 1 + collisionPair.firstRect.M * rqFirst.x * rqFirst.x / collisionPair.firstRect.Izz;
+    const mRatio = collisionPair.firstRect.M / collisionPair.secondRect.M;
+    const B11 = mRatio + collisionPair.firstRect.M * rqSecnd.y * rqSecnd.y / collisionPair.secondRect.Izz;
+    const B12 = - collisionPair.firstRect.M * rqSecnd.x * rqSecnd.y / collisionPair.secondRect.Izz;
+    const B22 = mRatio + collisionPair.firstRect.M * rqSecnd.x * rqSecnd.x / collisionPair.secondRect.Izz;
+
+    const vqFirst = new THREE.Vector3(0, 0, collisionPair.firstRect.w).cross(rqFirst).add(collisionPair.firstRect.v);
+    const vqSecnd = new THREE.Vector3(0, 0, collisionPair.secondRect.w).cross(rqSecnd).add(collisionPair.secondRect.v);
+    const n = collisionPair.edgeNormal.clone();
+
+    if (vqFirst.clone().sub(vqSecnd).dot(n) > 0) {
+      // already leaving?
+      return;
+    }
+
+    const rhs = n.multiplyScalar(- (1 + k_restitution) * vqFirst.sub(vqSecnd).dot(n)); // n, vqFirst, vqSecnd are modified
+
+    const A = new THREE.Matrix3().set(A11 + B11, A12 + B12, 0, A12 + B12, A22 + B22, 0, 0, 0, 1);
+    const deltaVgFirst = rhs.applyMatrix3(A.invert());
+    const deltaVgSecond = deltaVgFirst.clone().multiplyScalar(-mRatio);
+    const deltaWFirst = collisionPair.firstRect.M * (rqFirst.x * deltaVgFirst.y - rqFirst.y * deltaVgFirst.x) / collisionPair.firstRect.Izz;
+    const deltaWSecnd = - collisionPair.secondRect.M * (rqSecnd.x * deltaVgSecond.y - rqSecnd.y * deltaVgSecond.x) / collisionPair.secondRect.Izz;
+
+    collisionPair.firstRect.v.add(deltaVgFirst);
+    collisionPair.firstRect.w += deltaWFirst;
+    collisionPair.secondRect.v.add(deltaVgSecond);
+    collisionPair.secondRect.w += deltaWSecnd;
   }
 }
 
@@ -159,6 +291,10 @@ function run_rects_update() {
 
   rects_update(elapsedSeconds);
   rects_wall_collision();
+  const AABBIntrsctnPairs = find_rects_AABB_intersect_pairs();
+  const collisionPairs = find_rects_rects_collision_pairs(AABBIntrsctnPairs);
+  process_collision_pairs(collisionPairs);
+
   draw_rects();
   lastTimestamp = timestamp;
 }
@@ -170,7 +306,7 @@ function draw_rects() {
     // ctx.save();
     // ctx.translate(rects[i].pos.x, rects[i].pos.y)
     // ctx.rotate(rects[i].orientatn);
-    ctx.fillStyle = palette[i % palette.length];
+    ctx.fillStyle = rects[i].color;
     // ctx.fillRect(0, 0, rects[i].width, rects[i].height);
     // ctx.restore();
 
@@ -203,10 +339,10 @@ var canvas = document.getElementById("canvas");
 var ctx = canvas.getContext("2d");
 
 const positionRange = { minX: k_wallWidthMin + 100, maxX: k_wallHeightMax - 100, minY: k_wallHeightMin + 100, maxY: k_wallHeightMax - 100};
-const speedRange = { min: 5, max: 10 };
-const lengthRange = { min: 20, max: 40 };
-const rects = generateRects(10, positionRange, speedRange, lengthRange);
+const speedRange = { min: 15, max: 30 };
+const lengthRange = { min: 20, max: 90 };
 const palette = ["red", "green", "blue", "orange", "purple"];
+const rects = generateRects(9, positionRange, speedRange, lengthRange);
 
 let lastTimestamp = performance.now();
 
