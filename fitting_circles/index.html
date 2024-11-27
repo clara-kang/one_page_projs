@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draw Path</title>
+    <style>
+      #container {
+          position: relative;
+      }
+      canvas {
+          border: 1px solid black;
+          position: absolute;
+          top: 0;
+          left: 0;
+      }
+      #pathCanvas {
+          z-index: 2; /* Place pathCanvas on top */
+      }
+
+      #circleCanvas {
+          z-index: 1; /* Place circleCanvas below pathCanvas */
+      }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <canvas id="pathCanvas" width="600" height="400"></canvas>
+    <canvas id="circleCanvas" width="600" height="400"></canvas>
+  </div>
+<script type="module">
+
+// Get the canvas and context
+const pathCanvas = document.getElementById('pathCanvas');
+const pathCtx = pathCanvas.getContext('2d');
+const circleCanvas = document.getElementById('circleCanvas');
+const circleCtx = circleCanvas.getContext('2d');
+
+// Array to hold the points of the path
+const xPoints = [];
+const yPoints = [];
+let minX = Infinity;
+let minY = Infinity;
+let maxX = -Infinity;
+let maxY = -Infinity;
+let drawing = false;
+
+// Start drawing on mouse down
+pathCanvas.addEventListener('mousedown', (event) => {
+    clearData();
+    clearCircle();
+    clearPath();
+    drawing = true;
+    const { x, y } = getMousePosition(event);
+    xPoints.push(x);
+    yPoints.push(y);
+    updateBB(x, y);
+    pathCtx.strokeStyle = 'pink';
+    pathCtx.beginPath();
+    pathCtx.moveTo(x, y);
+});
+
+// Draw line and store points on mouse move
+pathCanvas.addEventListener('mousemove', (event) => {
+  if (drawing) {
+    const { x, y } = getMousePosition(event);
+    xPoints.push(x);
+    yPoints.push(y);
+    updateBB(x, y);
+    pathCtx.lineTo(x, y);
+    pathCtx.stroke();
+  }
+});
+
+// Stop drawing on mouse up
+pathCanvas.addEventListener('mouseup', () => {
+  drawing = false;
+  pathCtx.closePath();
+
+  const result = calcInputAndfitCircle();
+  drawCircle(result.cx, result.cy, result.r);
+});
+
+// Function to get the mouse position relative to the canvas
+function getMousePosition(event) {
+    const rect = pathCanvas.getBoundingClientRect();
+    return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+    };
+}
+
+function updateBB(x, y) {
+  minX = Math.min(x, minX);
+  maxX = Math.max(x, maxX);
+  minY = Math.min(y, minY);
+  maxY = Math.max(y, maxY);
+}
+
+function clearData() {
+    // Clear the arrays
+    xPoints.length = 0;
+    yPoints.length = 0;
+
+    // Reset the bounding box variables
+    minX = Infinity;
+    minY = Infinity;
+    maxX = -Infinity;
+    maxY = -Infinity;
+}
+
+function calcInputAndfitCircle() {
+  const initialCx = (minX + maxX) / 2.0;
+  const initialCy = (minY + maxY) / 2.0;
+  const initialR = Math.sqrt(((maxX - minX) / 2) ** 2 + ((maxY - minY) / 2) ** 2);
+  const stepSize = 0.0001;
+  const stepNum = 500;
+
+  return fitCircle(xPoints, yPoints, initialCx, initialCy, initialR, stepSize, stepNum);
+}
+
+// gradient descent circle fitting
+function fitCircle(xPoints, yPoints, initialCx, initialCy, initialR, stepSize, stepNum) {
+  let cx = initialCx;
+  let cy = initialCy;
+  let r = initialR;
+  const N = xPoints.length;
+
+  function calcGradient(cx, cy, r) {
+    let dfdx = 0;
+    let dfdy = 0;
+    let dfdr = 0;
+
+    for (let i = 0; i < N; i++) {
+        const px = xPoints[i];
+        const py = yPoints[i];
+        const expr1 = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+        const expr2 = 2 * (1 - r / expr1);
+        
+        dfdx += -expr2 * (px - cx);
+        dfdy += -expr2 * (py - cy);
+        dfdr += -2 * (expr1 - r);
+    }
+    return [dfdx, dfdy, dfdr];
+  }
+
+  function calcF(cx, cy, r) {
+    let f = 0;
+
+    for (let i = 0; i < N; i++) {
+        const px = xPoints[i];
+        const py = yPoints[i];
+        f += (Math.sqrt((px - cx) ** 2 + (py - cy) ** 2) - r) ** 2;
+    }
+    return f;
+  }
+
+  let iteration = 0;
+  function gradientStep() {
+      if (iteration >= stepNum || drawing) {
+        return;
+      }
+
+      const gradF = calcGradient(cx, cy, r);
+
+      // Check for convergence
+      const gradMagnitude = Math.sqrt(gradF[0] ** 2 + gradF[1] ** 2 + gradF[2] ** 2);
+      if (gradMagnitude < 0.01) {
+          console.log("Converged at step:", iteration);
+          return;
+      }
+
+      // Update variables
+      const updateVector = gradF.map(grad => grad * stepSize);
+      cx -= updateVector[0];
+      cy -= updateVector[1];
+      r -= updateVector[2];
+
+      // Draw the updated circle
+      drawCircle(cx, cy, r);
+
+      iteration++;
+      requestAnimationFrame(gradientStep); // Schedule the next step
+  }
+
+  gradientStep(); // Start the gradient descent process
+
+  return { cx, cy, r };
+}
+
+// Function to draw a circle
+function drawCircle(cx, cy, r) {
+  circleCtx.clearRect(0, 0, circleCanvas.width, circleCanvas.height);
+  circleCtx.beginPath();
+  circleCtx.arc(cx, cy, r, 0, 2 * Math.PI); // Draw the circle with (cx, cy) as center and r as radius
+  circleCtx.strokeStyle = 'mintcream'; // Set the circle's color
+  circleCtx.lineWidth = 2; // Set the circle's line width
+  circleCtx.stroke();
+}
+
+function clearCircle() {
+  circleCtx.clearRect(0, 0, circleCanvas.width, circleCanvas.height);
+}
+
+function clearPath() {
+  pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
+}
+
+</script>
+</body>
+</html>
